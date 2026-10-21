@@ -1,0 +1,1 @@
+This repository uses Gradle 8.11.1 via the GitHub Actions setup-gradle action.
