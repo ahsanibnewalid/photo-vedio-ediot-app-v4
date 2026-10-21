@@ -23,12 +23,21 @@ public class MainActivity extends Activity {
   private static final int PHOTO=1, VIDEO=2;
   @Override public void onCreate(Bundle b) {
     super.onCreate(b);
+    try {
     root=new LinearLayout(this); root.setOrientation(1);root.setPadding(18,20,18,12);
     root.setBackgroundColor(Color.rgb(22,27,40));setContentView(root);
     TextView title=new TextView(this);title.setText("SHUVO STUDIO");title.setTextSize(26);title.setTextColor(Color.WHITE);root.addView(title);
     addButton("Open Photo",()->pick("image/*",PHOTO));
     addButton("Open Video",()->pick("video/*",VIDEO));
     status=new TextView(this);status.setTextColor(Color.WHITE);status.setText("Select a photo or video");root.addView(status);
+    } catch (Exception startupError) {
+      android.util.Log.e("ShuvoStudio", "Startup failed", startupError);
+      TextView fallback = new TextView(this);
+      fallback.setText("Shuvo Studio could not initialize: " + startupError.getClass().getSimpleName() + "\\n" + startupError.getMessage());
+      fallback.setPadding(24, 32, 24, 24);
+      fallback.setTextSize(16);
+      setContentView(fallback);
+    }
   }
   private void addButton(String name,Runnable action) { Button b=new Button(this);b.setText(name);root.addView(b);b.setOnClickListener(v->action.run());}
   private void pick(String mime,int code) { Intent i=new Intent(Intent.ACTION_GET_CONTENT);i.setType(mime);i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,code); }
