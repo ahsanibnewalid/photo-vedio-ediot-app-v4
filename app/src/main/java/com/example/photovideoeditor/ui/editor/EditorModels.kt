@@ -3,8 +3,8 @@ package com.example.photovideoeditor.ui.editor
 import com.example.photovideoeditor.engine.RenderLayerConfig
 
 enum class TrackType { VIDEO, AUDIO, TEXT }
-enum class ActiveSheet { NONE, EFFECTS, AUDIO, TEXT, SPEED }
-enum class EditorTool { SPLIT, SPEED, AUDIO, TEXT, EFFECTS, FILTERS, ADJUST }
+enum class ActiveSheet { NONE, EFFECTS, AUDIO, TEXT, SPEED, ADJUST, TRANSFORM, CAPTIONS, AI, CANVAS }
+enum class EditorTool { SPLIT, SPEED, AUDIO, TEXT, EFFECTS, FILTERS, ADJUST, CROP, ROTATE, VOLUME, TRANSITION, CAPTIONS, STICKERS, AI, CANVAS, KEYFRAME, FREEZE, DUPLICATE, DELETE }
 
 data class VideoClip(
     val id: String,
@@ -15,7 +15,11 @@ data class VideoClip(
     val timelineStartMs: Long,
     val timelineEndMs: Long,
     val speed: Float = 1f,
-    val muted: Boolean = false
+    val muted: Boolean = false,
+    val volume: Float = 1f,
+    val rotationDegrees: Float = 0f,
+    val scale: Float = 1f,
+    val mirrored: Boolean = false
 ) {
     init {
         require(startInMediaMs >= 0)
@@ -23,6 +27,8 @@ data class VideoClip(
         require(timelineStartMs >= 0)
         require(timelineEndMs > timelineStartMs)
         require(speed > 0f)
+        require(volume in 0f..1f)
+        require(scale > 0f)
     }
     val mediaDurationMs: Long get() = endInMediaMs - startInMediaMs
     val timelineDurationMs: Long get() = timelineEndMs - timelineStartMs
@@ -74,10 +80,7 @@ data class TimelineState(
     val redoHistory: List<TimelineSnapshot> = emptyList()
 ) {
     fun normalizedPlayhead(): Long = playheadMs.coerceIn(0L, totalDurationMs)
-    fun snapshot() = TimelineSnapshot(
-        normalizedPlayhead(), totalDurationMs, selectedClipId,
-        videoClips, audioTracks, textOverlays, renderLayer
-    )
+    fun snapshot() = TimelineSnapshot(normalizedPlayhead(), totalDurationMs, selectedClipId, videoClips, audioTracks, textOverlays, renderLayer)
     fun withRecalculatedDuration(): TimelineState {
         val duration = videoClips.maxOfOrNull { it.timelineEndMs } ?: 0L
         return copy(totalDurationMs = duration, playheadMs = playheadMs.coerceIn(0L, duration))
