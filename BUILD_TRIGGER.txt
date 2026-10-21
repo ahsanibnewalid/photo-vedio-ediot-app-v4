@@ -1,0 +1,1 @@
+APK build is configured in .github/workflows/build-apk.yml. Pushes to main trigger a debug APK build and artifact upload.
