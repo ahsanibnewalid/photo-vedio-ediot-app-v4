@@ -24,15 +24,10 @@ import com.example.photovideoeditor.ui.editor.VideoClip
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.File
 import kotlin.coroutines.resume
-import kotlin.math.roundToLong
 
 /**
- * Production render layer for the editor project.
- *
- * It converts the timeline model into a Media3 Composition. Video clips are clipped,
- * speed-adjusted, muted when requested, and receive baked visual/text effects. Additional
- * audio tracks are composed as independent audio sequences so Media3 can mix them into the
- * final MP4. The UI never talks to Transformer directly.
+ * Dedicated Media3 render layer. The editor model is converted into a composition here so
+ * preview/UI state remains independent from the export implementation.
  */
 @OptIn(UnstableApi::class)
 class EditorProjectRenderer(private val context: Context) {
@@ -50,11 +45,12 @@ class EditorProjectRenderer(private val context: Context) {
         val videoItems = state.videoClips.sortedBy { it.timelineStartMs }.map { clip ->
             buildVideoItem(clip, state.textOverlays)
         }
-        val videoSequence = EditedMediaItemSequence.withAudioAndVideoFrom(videoItems)
+        val videoSequence = EditedMediaItemSequence.Builder()
+            .addItems(videoItems)
+            .build()
         val sequences = mutableListOf(videoSequence)
 
-        // Each project audio track becomes a secondary audio sequence. Media3 mixes overlapping
-        // sequences into the single output audio track.
+        // Secondary audio sequences are mixed by Media3 when they overlap the video sequence.
         state.audioTracks.filter { !it.muted }.forEach { track ->
             sequences += buildAudioSequence(track)
         }
@@ -103,14 +99,12 @@ class EditorProjectRenderer(private val context: Context) {
 
         val textureOverlays = overlays
             .filter { it.timelineStartMs < clip.timelineEndMs && it.timelineEndMs > clip.timelineStartMs }
-            .map { overlay -> buildTextOverlay(overlay) }
-
+            .map { buildTextOverlay(it) }
         val videoEffects = mutableListOf<androidx.media3.common.Effect>()
         if (textureOverlays.isNotEmpty()) videoEffects += OverlayEffect(textureOverlays)
 
-        val effects = Effects(emptyList(), videoEffects)
         val builder = EditedMediaItem.Builder(mediaItem)
-            .setEffects(effects)
+            .setEffects(Effects(emptyList(), videoEffects))
             .setRemoveAudio(clip.muted)
 
         if (clip.speed != 1f) {
@@ -120,11 +114,11 @@ class EditorProjectRenderer(private val context: Context) {
                 override fun getNextSpeedChangeTimeUs(timeUs: Long): Long = C.TIME_UNSET
             }
             @Suppress("DEPRECATION")
-            val pair = Effects.createExperimentalSpeedChangingEffect(speedProvider)
+            val speedPair = Effects.createExperimentalSpeedChangingEffect(speedProvider)
             builder.setEffects(
                 Effects(
-                    listOf(pair.first),
-                    videoEffects + pair.second
+                    listOf(speedPair.first),
+                    videoEffects + speedPair.second
                 )
             )
         }
@@ -154,6 +148,8 @@ class EditorProjectRenderer(private val context: Context) {
                 .setClippingConfiguration(clipping)
                 .build()
         ).build()
-        return EditedMediaItemSequence.withAudioFrom(listOf(item))
+        return EditedMediaItemSequence.Builder()
+            .addItem(item)
+            .build()
     }
 }
