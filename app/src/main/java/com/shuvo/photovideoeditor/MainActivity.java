@@ -38,7 +38,7 @@ public class MainActivity extends Activity {
     try { if(request==PHOTO)openPhoto(data.getData());else if(request==VIDEO)openVideo(data.getData()); }
     catch(Exception e){status.setText("Error: "+e.getMessage());}
   }
-  private void clearEditor() {while(root.getChildCount()>4)root.removeViewAt(4);}
+  private void clearEditor() {while(root.getChildCount()>5)root.removeViewAt(5);}
   private void openPhoto(Uri uri)throws Exception {
     try(InputStream in=getContentResolver().openInputStream(uri)){
       BitmapFactory.Options opt=new BitmapFactory.Options();opt.inSampleSize=2;
