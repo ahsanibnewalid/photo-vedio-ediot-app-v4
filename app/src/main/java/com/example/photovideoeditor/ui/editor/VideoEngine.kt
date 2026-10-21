@@ -58,7 +58,7 @@ class VideoEngine(
         val mediaPosition = clip.startInMediaMs + ((position - clip.timelineStartMs) * clip.speed).roundToLong()
         player.seekTo(mediaPosition.coerceIn(clip.startInMediaMs, clip.endInMediaMs))
         player.setPlaybackSpeed(clip.speed)
-        player.volume = if (clip.muted) 0f else 1f
+        player.volume = if (clip.muted) 0f else clip.volume
         onPlayheadChanged(position)
     }
 
@@ -70,6 +70,7 @@ class VideoEngine(
     }
 
     fun setMuted(muted: Boolean) { player.volume = if (muted) 0f else 1f }
+    fun setVolume(volume: Float) { player.volume = volume.coerceIn(0f, 1f) }
 
     fun trimClip(clip: VideoClip, newStartInMediaMs: Long, newEndInMediaMs: Long): VideoClip {
         require(newStartInMediaMs >= clip.startInMediaMs)
@@ -97,7 +98,7 @@ class VideoEngine(
         player.setMediaItem(MediaItem.fromUri(clip.uri))
         player.prepare()
         player.setPlaybackSpeed(clip.speed)
-        player.volume = if (clip.muted) 0f else 1f
+        player.volume = if (clip.muted) 0f else clip.volume
         player.seekTo(clip.startInMediaMs)
         if (autoPlay) player.play()
     }
