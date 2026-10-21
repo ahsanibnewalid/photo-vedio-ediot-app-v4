@@ -1,5 +1,7 @@
 package com.example.photovideoeditor.ui.editor
 
+import com.example.photovideoeditor.engine.RenderLayerConfig
+
 enum class TrackType { VIDEO, AUDIO, TEXT }
 enum class ActiveSheet { NONE, EFFECTS, AUDIO, TEXT, SPEED }
 enum class EditorTool { SPLIT, SPEED, AUDIO, TEXT, EFFECTS, FILTERS, ADJUST }
@@ -56,7 +58,8 @@ data class TimelineSnapshot(
     val selectedClipId: String?,
     val videoClips: List<VideoClip>,
     val audioTracks: List<AudioTrack>,
-    val textOverlays: List<TextOverlay>
+    val textOverlays: List<TextOverlay>,
+    val renderLayer: RenderLayerConfig
 )
 
 data class TimelineState(
@@ -66,11 +69,15 @@ data class TimelineState(
     val videoClips: List<VideoClip> = emptyList(),
     val audioTracks: List<AudioTrack> = emptyList(),
     val textOverlays: List<TextOverlay> = emptyList(),
+    val renderLayer: RenderLayerConfig = RenderLayerConfig(),
     val history: List<TimelineSnapshot> = emptyList(),
     val redoHistory: List<TimelineSnapshot> = emptyList()
 ) {
     fun normalizedPlayhead(): Long = playheadMs.coerceIn(0L, totalDurationMs)
-    fun snapshot() = TimelineSnapshot(normalizedPlayhead(), totalDurationMs, selectedClipId, videoClips, audioTracks, textOverlays)
+    fun snapshot() = TimelineSnapshot(
+        normalizedPlayhead(), totalDurationMs, selectedClipId,
+        videoClips, audioTracks, textOverlays, renderLayer
+    )
     fun withRecalculatedDuration(): TimelineState {
         val duration = videoClips.maxOfOrNull { it.timelineEndMs } ?: 0L
         return copy(totalDurationMs = duration, playheadMs = playheadMs.coerceIn(0L, duration))
