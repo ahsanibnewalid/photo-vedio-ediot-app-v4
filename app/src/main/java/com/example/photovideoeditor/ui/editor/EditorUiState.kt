@@ -1,5 +1,7 @@
 package com.example.photovideoeditor.ui.editor
 
+import android.net.Uri
+
 data class EditorUiState(
     val isPlaying: Boolean = false,
     val currentPositionMs: Long = 0L,
@@ -15,5 +17,9 @@ data class EditorUiState(
     val timelineZoom: Float = 1f,
     val timelineState: TimelineState = TimelineState(),
     val canUndo: Boolean = false,
-    val canRedo: Boolean = false
+    val canRedo: Boolean = false,
+    val isExporting: Boolean = false,
+    val exportProgress: Float = 0f,
+    val exportedUri: Uri? = null,
+    val exportError: String? = null
 )
