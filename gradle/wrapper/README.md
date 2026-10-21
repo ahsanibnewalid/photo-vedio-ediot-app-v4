@@ -1,0 +1,1 @@
+The GitHub Actions build uses Gradle 8.11.1 directly via gradle/actions/setup-gradle. The launcher scripts are provided for local development.
