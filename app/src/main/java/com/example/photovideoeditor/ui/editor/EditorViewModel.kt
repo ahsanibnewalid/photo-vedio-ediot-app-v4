@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.math.roundToLong
 
 class EditorViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(EditorUiState())
@@ -23,16 +24,11 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     fun importVideo(uri: Uri) {
         viewModelScope.launch {
             val duration = readDuration(uri)
-            if (duration <= 0L) {
-                _uiState.update { it.copy(exportError = "The selected video could not be read.") }
-                return@launch
-            }
+            if (duration <= 0L) { _uiState.update { it.copy(exportError = "The selected video could not be read.") }; return@launch }
             val start = _uiState.value.timelineState.totalDurationMs
             val clip = VideoClip("clip-${System.currentTimeMillis()}", uri.toString(), "Video ${_uiState.value.videoClips.size + 1}", 0L, duration, start, start + duration)
             val state = _uiState.value.timelineState.copy(videoClips = _uiState.value.videoClips + clip, selectedClipId = clip.id).withRecalculatedDuration()
-            history.replaceState(state)
-            publishTimeline(state)
-            engine.setTimeline(state)
+            history.replaceState(state); publishTimeline(state); engine.setTimeline(state)
         }
     }
 
@@ -57,17 +53,13 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     fun setVideoClips(value: List<VideoClip>) { val next = _uiState.value.timelineState.copy(videoClips = value).withRecalculatedDuration(); history.replaceState(next); publishTimeline(next); engine.setTimeline(next) }
     fun setAudioTracks(value: List<AudioTrack>) { val next = _uiState.value.timelineState.copy(audioTracks = value); history.replaceState(next); publishTimeline(next) }
     fun setTextOverlays(value: List<TextOverlay>) { val next = _uiState.value.timelineState.copy(textOverlays = value); history.replaceState(next); publishTimeline(next) }
-
-    fun splitSelectedClip() {
-        val state = _uiState.value.timelineState
-        state.selectedClipId?.let { applyCommand(SplitClipCommand(it, state.playheadMs)) }
-    }
+    fun splitSelectedClip() { val state = _uiState.value.timelineState; state.selectedClipId?.let { applyCommand(SplitClipCommand(it, state.playheadMs)) } }
     fun trimClip(clipId: String, newStartInMediaMs: Long, newEndInMediaMs: Long, newTimelineStartMs: Long, newTimelineEndMs: Long) = applyCommand(TrimClipCommand(clipId, newStartInMediaMs, newEndInMediaMs, newTimelineStartMs, newTimelineEndMs))
 
     fun setSelectedSpeed(speed: Float) {
         val state = _uiState.value.timelineState
         val clip = state.videoClips.firstOrNull { it.id == state.selectedClipId } ?: return
-        val newEnd = clip.timelineStartMs + (clip.mediaDurationMs / speed).coerceAtLeast(1L)
+        val newEnd = clip.timelineStartMs + (clip.mediaDurationMs / speed).roundToLong().coerceAtLeast(1L)
         applyCommand(object : EditorCommand<TimelineState> {
             private var before: TimelineState? = null
             override fun execute(s: TimelineState): TimelineState { before = s; return s.copy(videoClips = s.videoClips.map { if (it.id == clip.id) it.copy(speed = speed, timelineEndMs = newEnd) else it }).withRecalculatedDuration() }
@@ -95,9 +87,6 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun applyCommand(command: EditorCommand<TimelineState>) { val next = history.executeCommand(command); publishTimeline(next); engine.setTimeline(next) }
     private fun publishTimeline(state: TimelineState) { _uiState.update { it.copy(currentPositionMs = state.normalizedPlayhead(), durationMs = state.totalDurationMs, videoClips = state.videoClips, audioTracks = state.audioTracks, textOverlays = state.textOverlays, selectedClipId = state.selectedClipId, timelineState = state, canUndo = history.canUndo(), canRedo = history.canRedo()) } }
-    private fun readDuration(uri: Uri): Long {
-        val retriever = MediaMetadataRetriever()
-        return try { retriever.setDataSource(getApplication<Application>(), uri); retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L } finally { retriever.release() }
-    }
+    private fun readDuration(uri: Uri): Long { val retriever = MediaMetadataRetriever(); return try { retriever.setDataSource(getApplication<Application>(), uri); retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L } finally { retriever.release() } }
     override fun onCleared() { engine.release(); super.onCleared() }
 }
