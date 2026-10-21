@@ -17,6 +17,12 @@ class MainActivity : ComponentActivity() {
         editorViewModel?.importVideo(uri)
     }
 
+    private val audioPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri ?: return@registerForActivityResult
+        runCatching { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+        editorViewModel?.importAudio(uri)
+    }
+
     private var editorViewModel: EditorViewModel? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -27,7 +33,8 @@ class MainActivity : ComponentActivity() {
                 editorViewModel = vm
                 MainEditorScreen(
                     viewModel = vm,
-                    onImport = { mediaPicker.launch(arrayOf("video/*")) },
+                    onImport = { mediaPicker.launch(arrayOf("video/*", "image/*")) },
+                    onImportAudio = { audioPicker.launch(arrayOf("audio/*")) },
                     onExport = vm::export
                 )
             }
