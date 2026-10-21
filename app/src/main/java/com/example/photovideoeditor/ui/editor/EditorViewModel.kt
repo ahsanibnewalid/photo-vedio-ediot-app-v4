@@ -102,25 +102,11 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         engine.setSpeed(speed)
     }
 
-    fun toggleSelectedMute() {
-        updateSelectedClip { it.copy(muted = !it.muted) }
-    }
-
-    fun setSelectedVolume(value: Float) {
-        updateSelectedClip { it.copy(volume = value.coerceIn(0f, 1f), muted = value <= 0f) }
-    }
-
-    fun rotateSelected(deltaDegrees: Float) {
-        updateSelectedClip { it.copy(rotationDegrees = (it.rotationDegrees + deltaDegrees) % 360f) }
-    }
-
-    fun toggleMirrorSelected() {
-        updateSelectedClip { it.copy(mirrored = !it.mirrored) }
-    }
-
-    fun setSelectedScale(value: Float) {
-        updateSelectedClip { it.copy(scale = value.coerceIn(0.5f, 3f)) }
-    }
+    fun toggleSelectedMute() { updateSelectedClip { it.copy(muted = !it.muted) } }
+    fun setSelectedVolume(value: Float) { val volume = value.coerceIn(0f, 1f); updateSelectedClip { it.copy(volume = volume, muted = volume <= 0f) }; engine.setVolume(volume) }
+    fun rotateSelected(deltaDegrees: Float) { updateSelectedClip { it.copy(rotationDegrees = (it.rotationDegrees + deltaDegrees) % 360f) } }
+    fun toggleMirrorSelected() { updateSelectedClip { it.copy(mirrored = !it.mirrored) } }
+    fun setSelectedScale(value: Float) { updateSelectedClip { it.copy(scale = value.coerceIn(0.5f, 3f)) } }
 
     fun setAdjustments(brightness: Float, contrast: Float) {
         val state = _uiState.value.timelineState
