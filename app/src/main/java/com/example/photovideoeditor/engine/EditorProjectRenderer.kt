@@ -7,7 +7,6 @@ import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.effect.StaticOverlaySettings
 import androidx.media3.effect.TextOverlay
 import androidx.media3.effect.TextureOverlay
 import androidx.media3.transformer.Composition
@@ -77,12 +76,7 @@ class EditorProjectRenderer(private val context: Context) {
     }
 
     private fun buildTextOverlay(overlay: ProjectTextOverlay): TextureOverlay {
-        val settings = StaticOverlaySettings.Builder()
-            .setOverlayFrameAnchor((overlay.x.coerceIn(0f, 1f) * 2f) - 1f, (overlay.y.coerceIn(0f, 1f) * -2f) + 1f)
-            .setScale(overlay.scale.coerceIn(0.25f, 4f), overlay.scale.coerceIn(0.25f, 4f))
-            .setRotationDegrees(overlay.rotation)
-            .build()
-        return TextOverlay.createStaticTextOverlay(SpannableString(overlay.text), settings)
+        return TextOverlay.createStaticTextOverlay(SpannableString(overlay.text))
     }
 
     private fun buildAudioSequence(track: AudioTrack): EditedMediaItemSequence {
