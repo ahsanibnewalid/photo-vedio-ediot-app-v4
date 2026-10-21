@@ -35,6 +35,7 @@ class EditorViewModel : ViewModel() {
     }
 
     fun selectTool(tool: EditorTool?) = _uiState.update { it.copy(selectedTool = tool) }
+
     fun selectClip(id: String?) {
         _uiState.update {
             it.copy(
@@ -43,6 +44,7 @@ class EditorViewModel : ViewModel() {
             )
         }
     }
+
     fun openSheet(sheet: ActiveSheet) = _uiState.update { it.copy(activeSheet = sheet) }
     fun closeSheet() = _uiState.update { it.copy(activeSheet = ActiveSheet.NONE) }
     fun selectEffect(id: String?) = _uiState.update { it.copy(selectedEffectId = id) }
@@ -50,26 +52,32 @@ class EditorViewModel : ViewModel() {
     fun setTimelineZoom(value: Float) = _uiState.update { it.copy(timelineZoom = value.coerceIn(0.5f, 4f)) }
 
     fun setVideoClips(value: List<VideoClip>) {
-        updateTimeline { it.copy(videoClips = value, totalDurationMs = value.maxOfOrNull { clip -> clip.timelineEndMs } ?: 0L) }
+        val next = _uiState.value.timelineState.copy(
+            videoClips = value,
+            totalDurationMs = value.maxOfOrNull { it.timelineEndMs } ?: 0L
+        )
+        history.replaceState(next)
+        publishTimeline(next)
     }
 
     fun setAudioTracks(value: List<AudioTrack>) {
-        updateTimeline { it.copy(audioTracks = value) }
+        val next = _uiState.value.timelineState.copy(audioTracks = value)
+        history.replaceState(next)
+        publishTimeline(next)
     }
 
     fun setTextOverlays(value: List<TextOverlay>) {
-        updateTimeline { it.copy(textOverlays = value) }
+        val next = _uiState.value.timelineState.copy(textOverlays = value)
+        history.replaceState(next)
+        publishTimeline(next)
     }
 
-    fun seekTimeline(positionMs: Long) {
-        updatePlaybackPosition(positionMs)
-    }
+    fun seekTimeline(positionMs: Long) = updatePlaybackPosition(positionMs)
 
     fun splitSelectedClip() {
         val state = _uiState.value.timelineState
         val clipId = state.selectedClipId ?: return
-        val command = SplitClipCommand(clipId, state.playheadMs)
-        applyCommand(command)
+        applyCommand(SplitClipCommand(clipId, state.playheadMs))
     }
 
     fun trimClip(
@@ -90,25 +98,13 @@ class EditorViewModel : ViewModel() {
         )
     }
 
-    fun undo() {
-        publishTimeline(history.undo())
-    }
-
-    fun redo() {
-        publishTimeline(history.redo())
-    }
-
+    fun undo() = publishTimeline(history.undo())
+    fun redo() = publishTimeline(history.redo())
     fun canUndo(): Boolean = history.canUndo()
     fun canRedo(): Boolean = history.canRedo()
 
     private fun applyCommand(command: EditorCommand<TimelineState>) {
         publishTimeline(history.executeCommand(command))
-    }
-
-    private fun updateTimeline(transform: (TimelineState) -> TimelineState) {
-        publishTimeline(transform(_uiState.value.timelineState))
-        history.clearHistory()
-        _uiState.update { it.copy(canUndo = false, canRedo = false) }
     }
 
     private fun publishTimeline(state: TimelineState) {
