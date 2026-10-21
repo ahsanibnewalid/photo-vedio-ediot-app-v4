@@ -13,6 +13,7 @@ data class EditorUiState(
     val selectedEffectId: String? = null,
     val effectIntensity: Float = 1f,
     val timelineZoom: Float = 1f,
+    val timelineState: TimelineState = TimelineState(),
     val canUndo: Boolean = false,
     val canRedo: Boolean = false
 )
