@@ -24,5 +24,9 @@ private val DarkScheme = darkColorScheme(
 
 @Composable
 fun PhotoVideoEditorTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = DarkScheme, content = content)
+    MaterialTheme(
+        colorScheme = DarkScheme,
+        typography = EditorTypography,
+        content = content
+    )
 }
