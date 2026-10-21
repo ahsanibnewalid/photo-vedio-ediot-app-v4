@@ -33,7 +33,7 @@ class MainActivity : ComponentActivity() {
                 editorViewModel = vm
                 MainEditorScreen(
                     viewModel = vm,
-                    onImport = { mediaPicker.launch(arrayOf("video/*", "image/*")) },
+                    onImport = { mediaPicker.launch(arrayOf("video/*")) },
                     onImportAudio = { audioPicker.launch(arrayOf("audio/*")) },
                     onExport = vm::export
                 )
