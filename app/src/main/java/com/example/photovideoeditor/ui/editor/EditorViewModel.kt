@@ -6,6 +6,7 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.photovideoeditor.engine.EditorProjectRenderer
+import com.example.photovideoeditor.engine.RenderLayerConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,6 +30,15 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             val clip = VideoClip("clip-${System.currentTimeMillis()}", uri.toString(), "Video ${_uiState.value.videoClips.size + 1}", 0L, duration, start, start + duration)
             val state = _uiState.value.timelineState.copy(videoClips = _uiState.value.videoClips + clip, selectedClipId = clip.id).withRecalculatedDuration()
             history.replaceState(state); publishTimeline(state); engine.setTimeline(state)
+        }
+    }
+
+    fun importAudio(uri: Uri) {
+        viewModelScope.launch {
+            val duration = readDuration(uri).coerceAtLeast(1L)
+            val track = AudioTrack("audio-${System.currentTimeMillis()}", uri.toString(), "Music ${_uiState.value.audioTracks.size + 1}", 0L, duration, 0L, duration)
+            val next = _uiState.value.timelineState.copy(audioTracks = _uiState.value.audioTracks + track)
+            history.replaceState(next); publishTimeline(next); engine.setTimeline(next)
         }
     }
 
@@ -56,6 +66,30 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     fun splitSelectedClip() { val state = _uiState.value.timelineState; state.selectedClipId?.let { applyCommand(SplitClipCommand(it, state.playheadMs)) } }
     fun trimClip(clipId: String, newStartInMediaMs: Long, newEndInMediaMs: Long, newTimelineStartMs: Long, newTimelineEndMs: Long) = applyCommand(TrimClipCommand(clipId, newStartInMediaMs, newEndInMediaMs, newTimelineStartMs, newTimelineEndMs))
 
+    fun deleteSelectedClip() {
+        val state = _uiState.value.timelineState
+        val clip = state.videoClips.firstOrNull { it.id == state.selectedClipId } ?: return
+        val before = state
+        val next = state.copy(videoClips = state.videoClips.filterNot { it.id == clip.id }, selectedClipId = null).withRecalculatedDuration()
+        applyCommand(object : EditorCommand<TimelineState> {
+            override fun execute(s: TimelineState) = next
+            override fun undo(s: TimelineState) = before
+        })
+    }
+
+    fun duplicateSelectedClip() {
+        val state = _uiState.value.timelineState
+        val clip = state.videoClips.firstOrNull { it.id == state.selectedClipId } ?: return
+        val offset = clip.timelineDurationMs
+        val copy = clip.copy(id = "clip-${System.currentTimeMillis()}", title = "${clip.title} copy", timelineStartMs = clip.timelineEndMs, timelineEndMs = clip.timelineEndMs + offset)
+        val shifted = state.videoClips.map { if (it.timelineStartMs >= clip.timelineEndMs) it.copy(timelineStartMs = it.timelineStartMs + offset, timelineEndMs = it.timelineEndMs + offset) else it }
+        val next = state.copy(videoClips = shifted + copy, selectedClipId = copy.id).withRecalculatedDuration()
+        applyCommand(object : EditorCommand<TimelineState> {
+            override fun execute(s: TimelineState) = next
+            override fun undo(s: TimelineState) = state
+        })
+    }
+
     fun setSelectedSpeed(speed: Float) {
         val state = _uiState.value.timelineState
         val clip = state.videoClips.firstOrNull { it.id == state.selectedClipId } ?: return
@@ -66,6 +100,49 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             override fun undo(s: TimelineState): TimelineState = before ?: s
         })
         engine.setSpeed(speed)
+    }
+
+    fun toggleSelectedMute() {
+        updateSelectedClip { it.copy(muted = !it.muted) }
+    }
+
+    fun setSelectedVolume(value: Float) {
+        updateSelectedClip { it.copy(volume = value.coerceIn(0f, 1f), muted = value <= 0f) }
+    }
+
+    fun rotateSelected(deltaDegrees: Float) {
+        updateSelectedClip { it.copy(rotationDegrees = (it.rotationDegrees + deltaDegrees) % 360f) }
+    }
+
+    fun toggleMirrorSelected() {
+        updateSelectedClip { it.copy(mirrored = !it.mirrored) }
+    }
+
+    fun setSelectedScale(value: Float) {
+        updateSelectedClip { it.copy(scale = value.coerceIn(0.5f, 3f)) }
+    }
+
+    fun setAdjustments(brightness: Float, contrast: Float) {
+        val state = _uiState.value.timelineState
+        val before = state
+        val next = state.copy(renderLayer = RenderLayerConfig(brightness = brightness.coerceIn(-1f, 1f), contrast = contrast.coerceAtLeast(-1f), rotationDegrees = state.renderLayer.rotationDegrees, scaleX = state.renderLayer.scaleX, scaleY = state.renderLayer.scaleY))
+        applyCommand(object : EditorCommand<TimelineState> {
+            override fun execute(s: TimelineState) = next
+            override fun undo(s: TimelineState) = before
+        })
+    }
+
+    fun addCaption(text: String) {
+        val state = _uiState.value.timelineState
+        val start = state.playheadMs
+        val end = (start + 3000L).coerceAtMost(state.totalDurationMs.coerceAtLeast(start + 1L))
+        val overlay = TextOverlay("text-${System.currentTimeMillis()}", text.trim(), start, end)
+        if (overlay.text.isBlank()) return
+        val next = state.copy(textOverlays = state.textOverlays + overlay)
+        applyCommand(object : EditorCommand<TimelineState> {
+            override fun execute(s: TimelineState) = next
+            override fun undo(s: TimelineState) = state
+        })
     }
 
     fun undo() { val s = history.undo(); publishTimeline(s); engine.setTimeline(s) }
@@ -84,6 +161,17 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
     fun clearExportResult() = _uiState.update { it.copy(exportedUri = null, exportError = null) }
+
+    private fun updateSelectedClip(transform: (VideoClip) -> VideoClip) {
+        val state = _uiState.value.timelineState
+        val id = state.selectedClipId ?: return
+        val before = state
+        val next = state.copy(videoClips = state.videoClips.map { if (it.id == id) transform(it) else it })
+        applyCommand(object : EditorCommand<TimelineState> {
+            override fun execute(s: TimelineState) = next
+            override fun undo(s: TimelineState) = before
+        })
+    }
 
     private fun applyCommand(command: EditorCommand<TimelineState>) { val next = history.executeCommand(command); publishTimeline(next); engine.setTimeline(next) }
     private fun publishTimeline(state: TimelineState) { _uiState.update { it.copy(currentPositionMs = state.normalizedPlayhead(), durationMs = state.totalDurationMs, videoClips = state.videoClips, audioTracks = state.audioTracks, textOverlays = state.textOverlays, selectedClipId = state.selectedClipId, timelineState = state, canUndo = history.canUndo(), canRedo = history.canRedo()) } }
