@@ -7,7 +7,6 @@ import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.StaticOverlaySettings
 import androidx.media3.effect.TextOverlay
 import androidx.media3.effect.TextureOverlay
@@ -25,13 +24,9 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.File
 import kotlin.coroutines.resume
 
-/**
- * Dedicated Media3 render layer. The editor model is converted into a composition here so
- * preview/UI state remains independent from the export implementation.
- */
+/** Converts the editor project into a Media3 composition and bakes it to MP4. */
 @OptIn(UnstableApi::class)
 class EditorProjectRenderer(private val context: Context) {
-
     suspend fun render(
         state: TimelineState,
         onProgress: (Float) -> Unit = {}
@@ -43,17 +38,11 @@ class EditorProjectRenderer(private val context: Context) {
 
         val output = File(context.cacheDir, "editor_${System.currentTimeMillis()}.mp4")
         val videoItems = state.videoClips.sortedBy { it.timelineStartMs }.map { clip ->
-            buildVideoItem(clip, state.textOverlays)
+            buildVideoItem(clip, state.textOverlays, state.renderLayer)
         }
-        val videoSequence = EditedMediaItemSequence.Builder()
-            .addItems(videoItems)
-            .build()
+        val videoSequence = EditedMediaItemSequence.Builder().addItems(videoItems).build()
         val sequences = mutableListOf(videoSequence)
-
-        // Secondary audio sequences are mixed by Media3 when they overlap the video sequence.
-        state.audioTracks.filter { !it.muted }.forEach { track ->
-            sequences += buildAudioSequence(track)
-        }
+        state.audioTracks.filter { !it.muted }.forEach { sequences += buildAudioSequence(it) }
 
         val composition = Composition.Builder(sequences).build()
         val transformer = Transformer.Builder(context)
@@ -75,18 +64,15 @@ class EditorProjectRenderer(private val context: Context) {
             })
             .build()
 
-        continuation.invokeOnCancellation {
-            transformer.cancel()
-            output.delete()
-        }
-
+        continuation.invokeOnCancellation { transformer.cancel(); output.delete() }
         onProgress(0f)
         transformer.start(composition, output.absolutePath)
     }
 
     private fun buildVideoItem(
         clip: VideoClip,
-        overlays: List<ProjectTextOverlay>
+        overlays: List<ProjectTextOverlay>,
+        renderLayerConfig: RenderLayerConfig
     ): EditedMediaItem {
         val clipping = MediaItem.ClippingConfiguration.Builder()
             .setStartPositionMs(clip.startInMediaMs)
@@ -97,14 +83,13 @@ class EditorProjectRenderer(private val context: Context) {
             .setClippingConfiguration(clipping)
             .build()
 
-        val textureOverlays = overlays
+        val activeOverlays = overlays
             .filter { it.timelineStartMs < clip.timelineEndMs && it.timelineEndMs > clip.timelineStartMs }
-            .map { buildTextOverlay(it) }
-        val videoEffects = mutableListOf<androidx.media3.common.Effect>()
-        if (textureOverlays.isNotEmpty()) videoEffects += OverlayEffect(textureOverlays)
+            .map(::buildTextOverlay)
 
+        val baseEffects = RenderLayer.buildEffects(renderLayerConfig, activeOverlays)
         val builder = EditedMediaItem.Builder(mediaItem)
-            .setEffects(Effects(emptyList(), videoEffects))
+            .setEffects(baseEffects)
             .setRemoveAudio(clip.muted)
 
         if (clip.speed != 1f) {
@@ -118,7 +103,7 @@ class EditorProjectRenderer(private val context: Context) {
             builder.setEffects(
                 Effects(
                     listOf(speedPair.first),
-                    videoEffects + speedPair.second
+                    baseEffects.videoEffects + speedPair.second
                 )
             )
         }
@@ -143,13 +128,8 @@ class EditorProjectRenderer(private val context: Context) {
             .setEndPositionMs(track.endInMediaMs)
             .build()
         val item = EditedMediaItem.Builder(
-            MediaItem.Builder()
-                .setUri(Uri.parse(track.uri))
-                .setClippingConfiguration(clipping)
-                .build()
+            MediaItem.Builder().setUri(Uri.parse(track.uri)).setClippingConfiguration(clipping).build()
         ).build()
-        return EditedMediaItemSequence.Builder()
-            .addItem(item)
-            .build()
+        return EditedMediaItemSequence.Builder().addItem(item).build()
     }
 }
