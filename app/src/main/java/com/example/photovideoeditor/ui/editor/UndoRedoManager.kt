@@ -1,8 +1,6 @@
 package com.example.photovideoeditor.ui.editor
 
-/**
- * Command stack for editor mutations. Commands should be deterministic and reversible.
- */
+/** Command stack with explicit state replacement for externally loaded editor projects. */
 class UndoRedoManager<S>(initialState: S) {
     private var state: S = initialState
     private val undoStack = ArrayDeque<EditorCommand<S>>()
@@ -13,9 +11,12 @@ class UndoRedoManager<S>(initialState: S) {
     fun canRedo(): Boolean = redoStack.isNotEmpty()
 
     fun executeCommand(command: EditorCommand<S>): S {
-        state = command.execute(state)
-        undoStack.addLast(command)
-        redoStack.clear()
+        val next = command.execute(state)
+        if (next != state) {
+            state = next
+            undoStack.addLast(command)
+            redoStack.clear()
+        }
         return state
     }
 
@@ -31,6 +32,12 @@ class UndoRedoManager<S>(initialState: S) {
         state = command.execute(state)
         undoStack.addLast(command)
         return state
+    }
+
+    /** Replaces the baseline after loading/importing a project and clears history. */
+    fun replaceState(newState: S) {
+        state = newState
+        clearHistory()
     }
 
     fun clearHistory() {
@@ -57,9 +64,8 @@ class SplitClipCommand(
         if (splitTimelineMs <= clip.timelineStartMs || splitTimelineMs >= clip.timelineEndMs) return state
 
         before = state
-        val firstTimelineDuration = splitTimelineMs - clip.timelineStartMs
         val mediaSplit = clip.startInMediaMs +
-            (firstTimelineDuration * clip.speed).toLong()
+            ((splitTimelineMs - clip.timelineStartMs) * clip.speed).toLong()
         val first = clip.copy(
             id = "${clip.id}-a",
             endInMediaMs = mediaSplit,
@@ -93,12 +99,11 @@ class TrimClipCommand(
     override fun execute(state: TimelineState): TimelineState {
         val index = state.videoClips.indexOfFirst { it.id == clipId }
         if (index < 0) return state
-        val clip = state.videoClips[index]
         if (newStartInMediaMs < 0L || newEndInMediaMs <= newStartInMediaMs ||
-            newTimelineEndMs <= newTimelineStartMs) return state
+            newTimelineStartMs < 0L || newTimelineEndMs <= newTimelineStartMs) return state
 
         before = state
-        val updated = clip.copy(
+        val updated = state.videoClips[index].copy(
             startInMediaMs = newStartInMediaMs,
             endInMediaMs = newEndInMediaMs,
             timelineStartMs = newTimelineStartMs,
