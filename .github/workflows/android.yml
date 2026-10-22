@@ -3,7 +3,21 @@ name: Build Shuvo Studio APKs
 on:
   push:
     branches: [main]
+    paths:
+      - 'app/**'
+      - 'gradle/**'
+      - '.github/workflows/android.yml'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - 'gradlew'
+      - 'gradlew.bat'
   workflow_dispatch:
+
+# Cancel obsolete builds when several commits are pushed in quick succession.
+concurrency:
+  group: shuvo-studio-android-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -11,7 +25,7 @@ permissions:
 jobs:
   build-android:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -31,16 +45,35 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
-      - name: Run release lint and build APK/AAB variants
+      # Keep lint separate from packaging. A lint failure must not prevent QA APKs
+      # and the full diagnostic report from being produced.
+      - name: Run release lint
+        id: lint
+        continue-on-error: true
+        run: ./gradlew :app:lintRelease --no-daemon --stacktrace
+
+      - name: Build debug APK, release APK, and release AAB
         env:
           SHUVO_KEYSTORE_PATH: ${{ secrets.SHUVO_KEYSTORE_PATH }}
           SHUVO_KEYSTORE_PASSWORD: ${{ secrets.SHUVO_KEYSTORE_PASSWORD }}
           SHUVO_KEY_PASSWORD: ${{ secrets.SHUVO_KEY_PASSWORD }}
           SHUVO_KEY_ALIAS: ${{ secrets.SHUVO_KEY_ALIAS }}
         run: |
-          ./gradlew :app:lintRelease :app:assembleDebug :app:assembleRelease :app:bundleRelease --no-daemon --stacktrace
+          ./gradlew :app:assembleDebug :app:assembleRelease :app:bundleRelease --no-daemon --stacktrace
+
+      - name: Upload lint diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shuvo-studio-lint-report
+          path: |
+            app/build/intermediates/lint_intermediate_text_report/release/lintReportRelease/lint-results-release.txt
+            app/build/reports/lint-results-release.html
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload installable debug APK for device QA
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: shuvo-studio-debug-apk
@@ -49,6 +82,7 @@ jobs:
           retention-days: 14
 
       - name: Upload release APK (signed only when release secrets are configured)
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: shuvo-studio-release-apk
@@ -57,17 +91,25 @@ jobs:
           retention-days: 14
 
       - name: Upload release mapping for crash de-obfuscation
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: shuvo-studio-release-mapping
           path: app/build/outputs/mapping/release/mapping.txt
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 90
 
       - name: Upload Android App Bundle
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: shuvo-studio-release-aab
           path: app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 14
+
+      - name: Fail job if release lint reported errors
+        if: always() && steps.lint.outcome == 'failure'
+        run: |
+          echo "::error::Release lint reported issues. Download the shuvo-studio-lint-report artifact and fix the listed findings."
+          exit 1
