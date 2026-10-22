@@ -23,6 +23,7 @@ class VideoEngine(
     val player: ExoPlayer = ExoPlayer.Builder(context.applicationContext).build()
     private var ticker: Job? = null
     private var clips: List<VideoClip> = emptyList()
+    private var photoItems: Map<String, PhotoTimelineItem> = emptyMap()
     private var currentClipId: String? = null
 
     private val listener = object : Player.Listener {
@@ -38,8 +39,23 @@ class VideoEngine(
     init { player.addListener(listener) }
 
     fun setTimeline(value: TimelineState) {
-        clips = value.videoClips.sortedBy { it.timelineStartMs }
-        if (clips.isNotEmpty() && currentClipId == null) loadClip(clips.first(), false)
+        photoItems = value.photoItems.associateBy { it.id }
+        val videoEntries = value.videoClips
+        val photoEntries = value.photoItems.map { photo ->
+            VideoClip(
+                id = photo.id,
+                uri = photo.uri.toString(),
+                title = "Photo",
+                startInMediaMs = 0L,
+                endInMediaMs = photo.durationMs,
+                timelineStartMs = photo.timelineStartMs,
+                timelineEndMs = photo.timelineEndMs
+            )
+        }
+        clips = (videoEntries + photoEntries).sortedBy { it.timelineStartMs }
+        if (clips.isNotEmpty() && (currentClipId == null || clips.none { it.id == currentClipId })) {
+            loadClip(clips.first(), false)
+        }
         onDurationChanged(value.totalDurationMs)
     }
 
@@ -95,7 +111,16 @@ class VideoEngine(
 
     private fun loadClip(clip: VideoClip, autoPlay: Boolean) {
         currentClipId = clip.id
-        player.setMediaItem(MediaItem.fromUri(clip.uri))
+        val photo = photoItems[clip.id]
+        val mediaItem = if (photo != null) {
+            MediaItem.Builder()
+                .setUri(photo.uri)
+                .setImageDurationMs(photo.durationMs)
+                .build()
+        } else {
+            MediaItem.fromUri(clip.uri)
+        }
+        player.setMediaItem(mediaItem)
         player.prepare()
         player.setPlaybackSpeed(clip.speed)
         player.volume = if (clip.muted) 0f else clip.volume
