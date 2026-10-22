@@ -26,6 +26,7 @@ import androidx.media3.transformer.Composition
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
+import androidx.media3.transformer.ProgressHolder
 import androidx.media3.transformer.Transformer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -149,7 +150,7 @@ class ExportForegroundService : Service() {
     }
 
     private fun startPolling() {
-        val holder = Transformer.ProgressHolder()
+        val holder = ProgressHolder()
         val task = object : Runnable {
             override fun run() {
                 if (!active || cancelled) return
