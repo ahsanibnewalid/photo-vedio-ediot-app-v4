@@ -165,6 +165,11 @@ class EditorProjectRenderer(private val context: Context) {
                 .setClippingConfiguration(clipping)
                 .build()
         ).build()
-        return EditedMediaItemSequence.Builder().addItem(item).build()
+        val sequenceBuilder = EditedMediaItemSequence.Builder()
+        if (track.timelineStartMs > 0L) {
+            sequenceBuilder.addGap(track.timelineStartMs)
+        }
+        sequenceBuilder.addItem(item)
+        return sequenceBuilder.build()
     }
 }
