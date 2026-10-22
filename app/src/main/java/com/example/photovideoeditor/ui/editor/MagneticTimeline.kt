@@ -274,7 +274,7 @@ private fun AudioTimelineTrackRow(
                 Box(
                     Modifier.width(width.dp).height(54.dp).padding(vertical = 3.dp)
                         .background(if (track.id == selectedTrackId) Color(0xFF17684F) else Color(0xFF244A3C), RoundedCornerShape(7.dp))
-                        .pointerInput(track.id, track.timelineStartMs) {
+                        .pointerInput(track.id) {
                             var totalDragPx = 0f
                             detectHorizontalDragGestures(onDragStart = { onSelectTrack(track.id) }) { _, delta ->
                                 totalDragPx += delta
