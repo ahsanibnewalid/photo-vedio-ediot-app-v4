@@ -15,6 +15,8 @@ import androidx.media3.transformer.ProgressHolder
 import androidx.media3.transformer.Transformer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -65,7 +67,7 @@ class VideoExportWorker(context: Context, params: WorkerParameters) : CoroutineW
             while (cont.isActive) {
                 delay(500)
                 if (transformer.getProgress(holder) == Transformer.PROGRESS_STATE_AVAILABLE) {
-                    setProgress(kotlinx.coroutines.flow.flowOf(androidx.work.Data.Builder().putInt("progress", holder.progress).build()).let { holderData -> holderData.first() })
+                    setProgress(androidx.work.Data.Builder().putInt("progress", holder.progress).build())
                     val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                     manager.notify(NOTIFICATION_ID, notification(holder.progress))
                 }
