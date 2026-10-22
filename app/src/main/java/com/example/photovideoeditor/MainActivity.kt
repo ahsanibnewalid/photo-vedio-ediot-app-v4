@@ -11,9 +11,8 @@ import com.example.photovideoeditor.ui.editor.MainEditorScreen
 import com.example.photovideoeditor.ui.theme.PhotoVideoEditorTheme
 
 class MainActivity : ComponentActivity() {
-    private val mediaPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    private val mediaPicker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         uri ?: return@registerForActivityResult
-        runCatching { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
         editorViewModel?.importVideo(uri)
     }
 
@@ -33,7 +32,7 @@ class MainActivity : ComponentActivity() {
                 editorViewModel = vm
                 MainEditorScreen(
                     viewModel = vm,
-                    onImport = { mediaPicker.launch(arrayOf("video/*")) },
+                    onImport = { mediaPicker.launch(ActivityResultContracts.PickVisualMedia.Request(ActivityResultContracts.PickVisualMedia.VideoOnly)) },
                     onImportAudio = { audioPicker.launch(arrayOf("audio/*")) },
                     onExport = vm::export
                 )
