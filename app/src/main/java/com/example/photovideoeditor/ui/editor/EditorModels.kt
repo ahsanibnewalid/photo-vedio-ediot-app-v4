@@ -62,8 +62,18 @@ data class AudioTrack(
     val timelineEndMs: Long,
     val volume: Float = 1f,
     val muted: Boolean = false,
-    val speed: Float = 1f
-)
+    val speed: Float = 1f,
+    val sourceDurationMs: Long = endInMediaMs
+) {
+    init {
+        require(startInMediaMs >= 0L && endInMediaMs > startInMediaMs)
+        require(timelineStartMs >= 0L && timelineEndMs > timelineStartMs)
+        require(volume.isFinite() && volume in 0f..1f)
+        require(speed.isFinite() && speed > 0f)
+        require(sourceDurationMs >= endInMediaMs)
+    }
+    val durationMs: Long get() = endInMediaMs - startInMediaMs
+}
 
 data class TextOverlay(
     val id: String,
@@ -84,7 +94,9 @@ data class TimelineSnapshot(
     val photoItems: List<PhotoTimelineItem>,
     val audioTracks: List<AudioTrack>,
     val textOverlays: List<TextOverlay>,
-    val renderLayer: RenderLayerConfig
+    val renderLayer: RenderLayerConfig,
+    val selectedEffectId: String? = null,
+    val effectIntensity: Float = 1f
 )
 
 data class TimelineState(
@@ -96,13 +108,16 @@ data class TimelineState(
     val audioTracks: List<AudioTrack> = emptyList(),
     val textOverlays: List<TextOverlay> = emptyList(),
     val renderLayer: RenderLayerConfig = RenderLayerConfig(),
+    val selectedEffectId: String? = null,
+    val effectIntensity: Float = 1f,
     val history: List<TimelineSnapshot> = emptyList(),
     val redoHistory: List<TimelineSnapshot> = emptyList()
 ) {
     fun normalizedPlayhead(): Long = playheadMs.coerceIn(0L, totalDurationMs)
     fun snapshot() = TimelineSnapshot(
         normalizedPlayhead(), totalDurationMs, selectedClipId, videoClips,
-        photoItems, audioTracks, textOverlays, renderLayer
+        photoItems, audioTracks, textOverlays, renderLayer,
+        selectedEffectId, effectIntensity
     )
     fun withRecalculatedDuration(): TimelineState {
         val videoEnd = videoClips.maxOfOrNull { it.timelineEndMs } ?: 0L

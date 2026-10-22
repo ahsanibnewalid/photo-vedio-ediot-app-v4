@@ -3,7 +3,10 @@ package com.example.photovideoeditor.ui.editor
 import android.content.Context
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.annotation.OptIn
 import androidx.media3.exoplayer.ExoPlayer
+import com.example.photovideoeditor.engine.StudioFilterFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -40,6 +43,7 @@ class VideoEngine(
 
     fun setTimeline(value: TimelineState) {
         photoItems = value.photoItems.associateBy { it.id }
+        setPreviewFilter(value.selectedEffectId, value.effectIntensity)
         val videoEntries = value.videoClips
         val photoEntries = value.photoItems.map { photo ->
             VideoClip(
@@ -76,6 +80,11 @@ class VideoEngine(
         player.setPlaybackSpeed(clip.speed)
         player.volume = if (clip.muted) 0f else clip.volume
         onPlayheadChanged(position)
+    }
+
+    @OptIn(UnstableApi::class)
+    fun setPreviewFilter(effectId: String?, intensity: Float) {
+        player.setVideoEffects(StudioFilterFactory.create(effectId, intensity.coerceIn(0f, 1f)))
     }
 
     fun setPlaying(playing: Boolean) { if (playing) player.play() else player.pause() }

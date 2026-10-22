@@ -39,10 +39,10 @@ class EditorProjectRenderer(private val context: Context) {
         val output = File(context.cacheDir, "editor_${System.currentTimeMillis()}.mp4")
         val timelineItems = buildList<Pair<Long, EditedMediaItem>> {
             state.videoClips.forEach { clip ->
-                add(clip.timelineStartMs to buildVideoItem(clip, state.textOverlays, state.renderLayer))
+                add(clip.timelineStartMs to buildVideoItem(clip, state.textOverlays, state.renderLayer, state.selectedEffectId, state.effectIntensity))
             }
             state.photoItems.forEach { photo ->
-                add(photo.timelineStartMs to buildPhotoItem(photo, state.textOverlays, state.renderLayer))
+                add(photo.timelineStartMs to buildPhotoItem(photo, state.textOverlays, state.renderLayer, state.selectedEffectId, state.effectIntensity))
             }
         }.sortedBy { it.first }.map { it.second }
 
@@ -53,7 +53,7 @@ class EditorProjectRenderer(private val context: Context) {
 
         val mainSequence = EditedMediaItemSequence.Builder().addItems(timelineItems).build()
         val sequences = mutableListOf(mainSequence)
-        state.audioTracks.filter { !it.muted }.forEach { sequences += buildAudioSequence(it) }
+        state.audioTracks.filter { it.endInMediaMs > it.startInMediaMs }.forEach { sequences += buildAudioSequence(it) }
         val composition = Composition.Builder(sequences).build()
         val transformer = Transformer.Builder(context)
             .addListener(object : Transformer.Listener {
@@ -92,7 +92,9 @@ class EditorProjectRenderer(private val context: Context) {
     private fun buildVideoItem(
         clip: VideoClip,
         overlays: List<ProjectTextOverlay>,
-        renderLayerConfig: RenderLayerConfig
+        renderLayerConfig: RenderLayerConfig,
+        selectedEffectId: String?,
+        effectIntensity: Float
     ): EditedMediaItem {
         val clipping = MediaItem.ClippingConfiguration.Builder()
             .setStartPositionMs(clip.startInMediaMs)
@@ -111,8 +113,9 @@ class EditorProjectRenderer(private val context: Context) {
             scaleY = renderLayerConfig.scaleY * clip.scale
         )
         val baseEffects = RenderLayer.buildEffects(clipConfig, activeOverlays)
+        val videoEffects = baseEffects.videoEffects + StudioFilterFactory.create(selectedEffectId, effectIntensity)
         val builder = EditedMediaItem.Builder(mediaItem)
-            .setEffects(baseEffects)
+            .setEffects(Effects(baseEffects.audioProcessors, videoEffects))
             .setRemoveAudio(clip.muted || clip.volume <= 0f)
 
         if (clip.speed != 1f) {
@@ -123,7 +126,7 @@ class EditorProjectRenderer(private val context: Context) {
             }
             @Suppress("DEPRECATION")
             val speedPair = Effects.createExperimentalSpeedChangingEffect(speedProvider)
-            builder.setEffects(Effects(listOf(speedPair.first), baseEffects.videoEffects + speedPair.second))
+            builder.setEffects(Effects(listOf(speedPair.first) + baseEffects.audioProcessors, videoEffects + speedPair.second))
         }
         return builder.build()
     }
@@ -131,7 +134,9 @@ class EditorProjectRenderer(private val context: Context) {
     private fun buildPhotoItem(
         photo: PhotoTimelineItem,
         overlays: List<ProjectTextOverlay>,
-        renderLayerConfig: RenderLayerConfig
+        renderLayerConfig: RenderLayerConfig,
+        selectedEffectId: String?,
+        effectIntensity: Float
     ): EditedMediaItem {
         val mediaItem = MediaItem.Builder()
             .setUri(photo.uri)
@@ -147,12 +152,11 @@ class EditorProjectRenderer(private val context: Context) {
         )
         return EditedMediaItem.Builder(mediaItem)
             .setFrameRate(30)
-            .setEffects(RenderLayer.buildEffects(photoConfig, activeOverlays))
+            .setEffects(RenderLayer.buildEffects(photoConfig, activeOverlays).let { base -> Effects(base.audioProcessors, base.videoEffects + StudioFilterFactory.create(selectedEffectId, effectIntensity)) })
             .build()
     }
 
-    private fun buildTextOverlay(overlay: ProjectTextOverlay): TextureOverlay =
-        TextOverlay.createStaticTextOverlay(SpannableString(overlay.text))
+    private fun buildTextOverlay(overlay: ProjectTextOverlay): TextureOverlay = StudioTextOverlayFactory.create(overlay)
 
     private fun buildAudioSequence(track: AudioTrack): EditedMediaItemSequence {
         val clipping = MediaItem.ClippingConfiguration.Builder()
@@ -164,7 +168,7 @@ class EditorProjectRenderer(private val context: Context) {
                 .setUri(Uri.parse(track.uri))
                 .setClippingConfiguration(clipping)
                 .build()
-        ).build()
+        ).setEffects(Effects(listOf(LinearGainAudioProcessor(if (track.muted) 0f else track.volume)), emptyList())).build()
         val sequenceBuilder = EditedMediaItemSequence.Builder()
         if (track.timelineStartMs > 0L) {
             sequenceBuilder.addGap(track.timelineStartMs)

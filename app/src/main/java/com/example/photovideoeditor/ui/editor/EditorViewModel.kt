@@ -98,12 +98,39 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     fun selectClip(id: String?) = _uiState.update { it.copy(selectedClipId = id, timelineState = it.timelineState.copy(selectedClipId = id)) }
     fun openSheet(sheet: ActiveSheet) = _uiState.update { it.copy(activeSheet = sheet) }
     fun closeSheet() = _uiState.update { it.copy(activeSheet = ActiveSheet.NONE) }
-    fun selectEffect(id: String?) = _uiState.update { it.copy(selectedEffectId = id) }
-    fun setEffectIntensity(value: Float) = _uiState.update { it.copy(effectIntensity = value.coerceIn(0f, 1f)) }
+    fun selectEffect(id: String?) = updateEffectState(id, _uiState.value.effectIntensity)
+    fun setEffectIntensity(value: Float) = updateEffectState(_uiState.value.selectedEffectId, value.coerceIn(0f, 1f))
+
+    private fun updateEffectState(effectId: String?, intensity: Float) {
+        val next = _uiState.value.timelineState.copy(selectedEffectId = effectId, effectIntensity = intensity.coerceIn(0f, 1f))
+        history.replaceState(next); publishTimeline(next); engine.setTimeline(next); engine.setPreviewFilter(effectId, intensity)
+    }
     fun setTimelineZoom(value: Float) = _uiState.update { it.copy(timelineZoom = value.coerceIn(0.5f, 4f)) }
 
     fun setVideoClips(value: List<VideoClip>) { val next = _uiState.value.timelineState.copy(videoClips = value).withRecalculatedDuration(); history.replaceState(next); publishTimeline(next); engine.setTimeline(next) }
-    fun setAudioTracks(value: List<AudioTrack>) { val next = _uiState.value.timelineState.copy(audioTracks = value); history.replaceState(next); publishTimeline(next) }
+    fun setAudioTracks(value: List<AudioTrack>) { val next = _uiState.value.timelineState.copy(audioTracks = value); history.replaceState(next); publishTimeline(next); engine.setTimeline(next) }
+
+    fun moveAudioTrack(trackId: String, timelineStartMs: Long) {
+        val state = _uiState.value.timelineState
+        val next = state.copy(audioTracks = state.audioTracks.map { track -> if (track.id != trackId) track else {
+            val start = timelineStartMs.coerceAtLeast(0L)
+            track.copy(timelineStartMs = start, timelineEndMs = Math.addExact(start, track.durationMs))
+        } })
+        history.replaceState(next); publishTimeline(next); engine.setTimeline(next)
+    }
+
+    fun trimAudioTrack(trackId: String, newStartInMediaMs: Long, newEndInMediaMs: Long) {
+        val state = _uiState.value.timelineState
+        val next = state.copy(audioTracks = state.audioTracks.map { track -> if (track.id != trackId) track else {
+            val start = newStartInMediaMs.coerceIn(0L, track.sourceDurationMs - 1L)
+            val end = newEndInMediaMs.coerceIn(start + 1L, track.sourceDurationMs)
+            track.copy(startInMediaMs = start, endInMediaMs = end, timelineEndMs = Math.addExact(track.timelineStartMs, end - start))
+        } })
+        history.replaceState(next); publishTimeline(next); engine.setTimeline(next)
+    }
+
+    fun setAudioTrackVolume(trackId: String, volume: Float) = setAudioTracks(_uiState.value.timelineState.audioTracks.map { if (it.id == trackId) it.copy(volume = volume.coerceIn(0f, 1f)) else it })
+    fun setAudioTrackMuted(trackId: String, muted: Boolean) = setAudioTracks(_uiState.value.timelineState.audioTracks.map { if (it.id == trackId) it.copy(muted = muted) else it })
     fun setTextOverlays(value: List<TextOverlay>) { val next = _uiState.value.timelineState.copy(textOverlays = value); history.replaceState(next); publishTimeline(next) }
     fun splitSelectedClip() { val state = _uiState.value.timelineState; state.selectedClipId?.let { applyCommand(SplitClipCommand(it, state.playheadMs)) } }
     fun trimClip(clipId: String, newStartInMediaMs: Long, newEndInMediaMs: Long, newTimelineStartMs: Long, newTimelineEndMs: Long) = applyCommand(TrimClipCommand(clipId, newStartInMediaMs, newEndInMediaMs, newTimelineStartMs, newTimelineEndMs))
@@ -269,7 +296,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun applyCommand(command: EditorCommand<TimelineState>) { val next = history.executeCommand(command); publishTimeline(next); engine.setTimeline(next) }
-    private fun publishTimeline(state: TimelineState) { _uiState.update { it.copy(currentPositionMs = state.normalizedPlayhead(), durationMs = state.totalDurationMs, videoClips = state.videoClips, photoItems = state.photoItems, audioTracks = state.audioTracks, textOverlays = state.textOverlays, selectedClipId = state.selectedClipId, timelineState = state, canUndo = history.canUndo(), canRedo = history.canRedo()) } }
+    private fun publishTimeline(state: TimelineState) { _uiState.update { it.copy(currentPositionMs = state.normalizedPlayhead(), durationMs = state.totalDurationMs, videoClips = state.videoClips, photoItems = state.photoItems, audioTracks = state.audioTracks, textOverlays = state.textOverlays, selectedClipId = state.selectedClipId, selectedEffectId = state.selectedEffectId, effectIntensity = state.effectIntensity, timelineState = state, canUndo = history.canUndo(), canRedo = history.canRedo()) } }
     private fun readDuration(uri: Uri): Long { val retriever = MediaMetadataRetriever(); return try { retriever.setDataSource(getApplication<Application>(), uri); retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L } finally { retriever.release() } }
     override fun onCleared() { engine.release(); super.onCleared() }
 }

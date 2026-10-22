@@ -57,6 +57,8 @@ fun MagneticTimeline(
     onPlayheadChanged: (Long) -> Unit,
     onSelectClip: (String) -> Unit,
     onTrim: (clipId: String, newStartMs: Long, newEndMs: Long) -> Unit,
+    onAudioMove: (trackId: String, timelineStartMs: Long) -> Unit,
+    onAudioTrim: (trackId: String, newStartInMediaMs: Long, newEndInMediaMs: Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -101,6 +103,7 @@ fun MagneticTimeline(
                 selectedClipId = state.selectedClipId,
                 onSelectPhoto = onSelectClip
             )
+            AudioTimelineTrackRow(state.audioTracks, metrics, state.selectedClipId, onSelectClip, onAudioMove, onAudioTrim)
         }
 
         Box(
@@ -245,6 +248,52 @@ private fun PhotoTimelineTrackRow(
                     Text("Photo", color = Color.White, maxLines = 1)
                 }
                 cursorMs = maxOf(cursorMs, photo.timelineEndMs)
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun AudioTimelineTrackRow(
+    tracks: List<AudioTrack>, metrics: TimelineMetrics, selectedTrackId: String?,
+    onSelectTrack: (String) -> Unit, onMove: (String, Long) -> Unit,
+    onTrim: (String, Long, Long) -> Unit
+) {
+    if (tracks.isEmpty()) return
+    Row(Modifier.height(64.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.width(60.dp).fillMaxHeight().background(Color(0xFF12251F)), contentAlignment = Alignment.Center) {
+            Text("AUDIO", color = Color(0xFF55D6A7))
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            var cursorMs = 0L
+            tracks.sortedBy { it.timelineStartMs }.forEach { track ->
+                val gapMs = (track.timelineStartMs - cursorMs).coerceAtLeast(0L)
+                if (gapMs > 0L) Box(Modifier.width(metrics.msToPx(gapMs).dp).height(1.dp))
+                val width = metrics.msToPx(track.durationMs).coerceAtLeast(52f)
+                Box(
+                    Modifier.width(width.dp).height(54.dp).padding(vertical = 3.dp)
+                        .background(if (track.id == selectedTrackId) Color(0xFF17684F) else Color(0xFF244A3C), RoundedCornerShape(7.dp))
+                        .pointerInput(track.id, track.timelineStartMs) {
+                            var totalDragPx = 0f
+                            detectHorizontalDragGestures(onDragStart = { onSelectTrack(track.id) }) { _, delta ->
+                                totalDragPx += delta
+                                onMove(track.id, (track.timelineStartMs + metrics.pxToMs(totalDragPx)).coerceAtLeast(0L))
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(if (track.muted) "Muted · ${track.title}" else "♫ ${track.title}", color = Color.White, maxLines = 1, modifier = Modifier.padding(horizontal = 10.dp))
+                    TrimHandle(Modifier.align(Alignment.CenterStart), onDrag = { delta ->
+                        val start = (track.startInMediaMs + metrics.pxToMs(delta * track.speed)).coerceIn(0L, track.endInMediaMs - 1L)
+                        onTrim(track.id, start, track.endInMediaMs)
+                    })
+                    TrimHandle(Modifier.align(Alignment.CenterEnd), onDrag = { delta ->
+                        val end = (track.endInMediaMs + metrics.pxToMs(delta * track.speed)).coerceIn(track.startInMediaMs + 1L, track.sourceDurationMs)
+                        onTrim(track.id, track.startInMediaMs, end)
+                    })
+                }
+                cursorMs = maxOf(cursorMs, track.timelineEndMs)
             }
         }
     }

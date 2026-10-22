@@ -77,7 +77,7 @@ fun MainEditorScreen(viewModel: EditorViewModel, onImport: () -> Unit = {}, onIm
     val selectedClip = state.videoClips.firstOrNull { it.id == state.selectedClipId }
 
     val configuration = LocalConfiguration.current
-    val timelineHeight = (configuration.screenHeightDp.dp * 0.20f).coerceIn(128.dp, 220.dp)
+    val timelineHeight = (configuration.screenHeightDp.dp * 0.24f).coerceIn(160.dp, 260.dp)
     val horizontalPadding = if (configuration.screenWidthDp >= 600) 24.dp else 12.dp
     Column(Modifier.fillMaxSize().background(Background).verticalScroll(rememberScrollState()).padding(horizontal = horizontalPadding)) {
         Row(Modifier.fillMaxWidth().height(66.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -125,6 +125,8 @@ fun MainEditorScreen(viewModel: EditorViewModel, onImport: () -> Unit = {}, onIm
                     val clip = state.videoClips.firstOrNull { it.id == clipId } ?: return@MagneticTimeline
                     viewModel.trimClip(clipId, newStart, newEnd, clip.timelineStartMs, clip.timelineEndMs)
                 },
+                onAudioMove = viewModel::moveAudioTrack,
+                onAudioTrim = viewModel::trimAudioTrack,
                 modifier = Modifier.fillMaxSize()
             )
         }
