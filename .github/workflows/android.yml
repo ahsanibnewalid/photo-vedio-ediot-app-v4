@@ -21,12 +21,14 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      # GitHub-hosted Android runners already include the Android SDK.
+      # Do not run setup-android's default "tools" package install; that package is obsolete.
+      - name: Verify Android SDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          "$ANDROID_HOME/platform-tools/adb" version
 
       - name: Build debug APK with project wrapper
         run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
