@@ -141,8 +141,8 @@ class EditorProjectRenderer(private val context: Context) {
             .filter { it.timelineStartMs < photo.timelineEndMs && it.timelineEndMs > photo.timelineStartMs }
             .map(::buildTextOverlay)
         val photoConfig = renderLayerConfig.copy(
-            brightness = photo.brightness.coerceIn(-1f, 1f),
-            contrast = (photo.contrast - 1f).coerceAtLeast(-1f),
+            brightness = (renderLayerConfig.brightness + photo.brightness).coerceIn(-1f, 1f),
+            contrast = (renderLayerConfig.contrast + photo.contrast - 1f).coerceIn(-1f, 1f),
             rotationDegrees = renderLayerConfig.rotationDegrees + photo.rotationDegrees
         )
         return EditedMediaItem.Builder(mediaItem)
