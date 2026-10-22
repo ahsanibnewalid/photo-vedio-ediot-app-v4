@@ -3,3 +3,11 @@
 /app/build/
 /local.properties
 *.iml
+
+# Generated Android packages and private signing material stay out of Git.
+*.apk
+*.aab
+*.jks
+*.keystore
+shuvo-release-log.txt
+shuvo-release-crash-log.txt
