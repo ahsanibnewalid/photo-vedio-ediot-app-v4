@@ -1,8 +1,10 @@
 package com.example.photovideoeditor.ui.editor
 
+import android.net.Uri
 import com.example.photovideoeditor.engine.RenderLayerConfig
+import java.util.UUID
 
-enum class TrackType { VIDEO, AUDIO, TEXT }
+enum class TrackType { VIDEO, PHOTO, AUDIO, TEXT }
 enum class ActiveSheet { NONE, EFFECTS, AUDIO, TEXT, SPEED, ADJUST, TRANSFORM, CAPTIONS, AI, CANVAS }
 enum class EditorTool { SPLIT, SPEED, AUDIO, TEXT, EFFECTS, FILTERS, ADJUST, CROP, ROTATE, VOLUME, TRANSITION, CAPTIONS, STICKERS, AI, CANVAS, KEYFRAME, FREEZE, DUPLICATE, DELETE }
 
@@ -34,6 +36,22 @@ data class VideoClip(
     val timelineDurationMs: Long get() = timelineEndMs - timelineStartMs
 }
 
+data class PhotoTimelineItem(
+    val id: String = "photo-${UUID.randomUUID()}",
+    val uri: Uri,
+    val durationMs: Long = 3_000L,
+    val timelineStartMs: Long = 0L,
+    val rotationDegrees: Float = 0f,
+    val brightness: Float = 0f,
+    val contrast: Float = 1f
+) {
+    init {
+        require(durationMs > 0L) { "Photo duration must be greater than zero." }
+        require(timelineStartMs >= 0L) { "Photo timeline start must not be negative." }
+    }
+    val timelineEndMs: Long get() = Math.addExact(timelineStartMs, durationMs)
+}
+
 data class AudioTrack(
     val id: String,
     val uri: String,
@@ -63,6 +81,7 @@ data class TimelineSnapshot(
     val totalDurationMs: Long,
     val selectedClipId: String?,
     val videoClips: List<VideoClip>,
+    val photoItems: List<PhotoTimelineItem>,
     val audioTracks: List<AudioTrack>,
     val textOverlays: List<TextOverlay>,
     val renderLayer: RenderLayerConfig
@@ -73,6 +92,7 @@ data class TimelineState(
     val totalDurationMs: Long = 0L,
     val selectedClipId: String? = null,
     val videoClips: List<VideoClip> = emptyList(),
+    val photoItems: List<PhotoTimelineItem> = emptyList(),
     val audioTracks: List<AudioTrack> = emptyList(),
     val textOverlays: List<TextOverlay> = emptyList(),
     val renderLayer: RenderLayerConfig = RenderLayerConfig(),
@@ -80,9 +100,14 @@ data class TimelineState(
     val redoHistory: List<TimelineSnapshot> = emptyList()
 ) {
     fun normalizedPlayhead(): Long = playheadMs.coerceIn(0L, totalDurationMs)
-    fun snapshot() = TimelineSnapshot(normalizedPlayhead(), totalDurationMs, selectedClipId, videoClips, audioTracks, textOverlays, renderLayer)
+    fun snapshot() = TimelineSnapshot(
+        normalizedPlayhead(), totalDurationMs, selectedClipId, videoClips,
+        photoItems, audioTracks, textOverlays, renderLayer
+    )
     fun withRecalculatedDuration(): TimelineState {
-        val duration = videoClips.maxOfOrNull { it.timelineEndMs } ?: 0L
+        val videoEnd = videoClips.maxOfOrNull { it.timelineEndMs } ?: 0L
+        val photoEnd = photoItems.maxOfOrNull { it.timelineEndMs } ?: 0L
+        val duration = maxOf(videoEnd, photoEnd)
         return copy(totalDurationMs = duration, playheadMs = playheadMs.coerceIn(0L, duration))
     }
 }
