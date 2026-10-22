@@ -4,6 +4,14 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val shuvoKeystorePath = providers.environmentVariable("SHUVO_KEYSTORE_PATH").orNull
+val shuvoKeystorePassword = providers.environmentVariable("SHUVO_KEYSTORE_PASSWORD").orNull
+val shuvoKeyPassword = providers.environmentVariable("SHUVO_KEY_PASSWORD").orNull
+val shuvoKeyAlias = providers.environmentVariable("SHUVO_KEY_ALIAS").orNull
+val hasReleaseSigning = listOf(
+    shuvoKeystorePath, shuvoKeystorePassword, shuvoKeyPassword, shuvoKeyAlias
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.example.photovideoeditor"
     compileSdk = 35
@@ -29,11 +37,30 @@ android {
         compose = true
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(requireNotNull(shuvoKeystorePath))
+                storePassword = requireNotNull(shuvoKeystorePassword)
+                keyPassword = requireNotNull(shuvoKeyPassword)
+                keyAlias = requireNotNull(shuvoKeyAlias)
+            }
+        }
+    }
+
     buildTypes {
         getByName("release") {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            // Without production credentials Gradle still produces an unsigned QA
+            // release APK; provide all four SHUVO_* variables to sign it.
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
