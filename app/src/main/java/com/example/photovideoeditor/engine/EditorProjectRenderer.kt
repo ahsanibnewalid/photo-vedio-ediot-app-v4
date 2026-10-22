@@ -55,9 +55,19 @@ class EditorProjectRenderer(private val context: Context) {
         val sequences = mutableListOf(mainSequence)
         state.audioTracks.filter { it.endInMediaMs > it.startInMediaMs }.forEach { sequences += buildAudioSequence(it) }
         val composition = Composition.Builder(sequences).build()
-        val transformer = Transformer.Builder(context)
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        val progressHolder = androidx.media3.transformer.ProgressHolder()
+        var progressPoll: Runnable? = null
+        lateinit var transformer: Transformer
+        fun stopProgressPolling() {
+            progressPoll?.let(handler::removeCallbacks)
+            progressPoll = null
+        }
+
+        transformer = Transformer.Builder(context)
             .addListener(object : Transformer.Listener {
                 override fun onCompleted(composition: Composition, exportResult: ExportResult) {
+                    stopProgressPolling()
                     if (continuation.isActive) {
                         onProgress(1f)
                         continuation.resume(Result.success(Uri.fromFile(output)))
@@ -69,6 +79,7 @@ class EditorProjectRenderer(private val context: Context) {
                     exportResult: ExportResult,
                     exportException: androidx.media3.transformer.ExportException
                 ) {
+                    stopProgressPolling()
                     if (continuation.isActive) {
                         output.delete()
                         continuation.resume(Result.failure(exportException))
@@ -77,13 +88,30 @@ class EditorProjectRenderer(private val context: Context) {
             }).build()
 
         continuation.invokeOnCancellation {
+            stopProgressPolling()
             transformer.cancel()
             output.delete()
         }
         onProgress(0f)
         try {
             transformer.start(composition, output.absolutePath)
+            val task = object : Runnable {
+                override fun run() {
+                    if (!continuation.isActive) return
+                    try {
+                        if (transformer.getProgress(progressHolder) == Transformer.PROGRESS_STATE_AVAILABLE) {
+                            onProgress(progressHolder.progress.coerceIn(0, 100) / 100f)
+                        }
+                    } catch (_: RuntimeException) {
+                        // Progress can be temporarily unavailable while Transformer prepares.
+                    }
+                    if (continuation.isActive) handler.postDelayed(this, 500L)
+                }
+            }
+            progressPoll = task
+            handler.post(task)
         } catch (error: Exception) {
+            stopProgressPolling()
             output.delete()
             if (continuation.isActive) continuation.resume(Result.failure(error))
         }

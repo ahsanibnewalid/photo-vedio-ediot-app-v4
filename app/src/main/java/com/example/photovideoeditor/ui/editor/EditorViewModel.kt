@@ -3,17 +3,15 @@ package com.example.photovideoeditor.ui.editor
 import android.app.Application
 import android.media.MediaMetadataRetriever
 import android.net.Uri
-import android.content.ContentResolver
-import android.os.Build
-import android.os.Environment
-import android.provider.MediaStore
-import android.content.ContentValues
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.photovideoeditor.engine.EditorProjectRenderer
+import com.example.photovideoeditor.engine.ExportForegroundService
+import com.example.photovideoeditor.engine.ExportPhase
+import com.example.photovideoeditor.engine.ExportRequestSnapshot
+import com.example.photovideoeditor.engine.ExportRequestSnapshotStore
+import com.example.photovideoeditor.engine.ExportStatusBus
 import com.example.photovideoeditor.engine.RenderLayerConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,7 +24,6 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     private val _uiState = MutableStateFlow(EditorUiState())
     val uiState: StateFlow<EditorUiState> = _uiState.asStateFlow()
     private val history = UndoRedoManager(TimelineState())
-    private val renderer = EditorProjectRenderer(application)
     private val engine = VideoEngine(application, viewModelScope, ::updatePlaybackPosition, { playing -> _uiState.update { it.copy(isPlaying = playing) } }, ::updateDuration)
     val player get() = engine.player
 
@@ -232,54 +229,64 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     fun canUndo() = history.canUndo()
     fun canRedo() = history.canRedo()
 
-    fun export() {
-        if (_uiState.value.isExporting || (_uiState.value.videoClips.isEmpty() && _uiState.value.photoItems.isEmpty())) return
-        val state = _uiState.value.timelineState
-        _uiState.update { it.copy(isExporting = true, exportProgress = 0f, exportError = null, exportedUri = null) }
+    init {
         viewModelScope.launch {
-            renderer.render(state) { progress -> _uiState.update { it.copy(exportProgress = progress) } }
-                .onSuccess { uri ->
-                    runCatching { publishVideoExport(uri) }
-                        .onSuccess { saved -> _uiState.update { it.copy(isExporting = false, exportProgress = 1f, exportedUri = saved) } }
-                        .onFailure { error -> _uiState.update { it.copy(isExporting = false, exportError = error.message ?: "Saving export failed") } }
+            ExportStatusBus.status.collect { status ->
+                _uiState.update { current ->
+                    when (status.phase) {
+                        ExportPhase.IDLE -> current
+                        ExportPhase.RUNNING -> current.copy(
+                            isExporting = true,
+                            exportProgress = status.progress,
+                            exportError = null
+                        )
+                        ExportPhase.SUCCEEDED -> current.copy(
+                            isExporting = false,
+                            exportProgress = 1f,
+                            exportedUri = status.outputUri,
+                            exportError = null
+                        )
+                        ExportPhase.FAILED -> current.copy(
+                            isExporting = false,
+                            exportError = status.error ?: "Export failed."
+                        )
+                        ExportPhase.CANCELLED -> current.copy(
+                            isExporting = false,
+                            exportProgress = 0f
+                        )
+                    }
                 }
-                .onFailure { error -> _uiState.update { it.copy(isExporting = false, exportError = error.message ?: "Export failed") } }
+            }
         }
     }
-    private suspend fun publishVideoExport(sourceUri: Uri): Uri = withContext(Dispatchers.IO) {
-        val context = getApplication<Application>()
-        val source = requireNotNull(sourceUri.path).let(::File)
-        require(source.isFile) { "Rendered video is missing" }
-        val name = "Shuvo_${System.currentTimeMillis()}.mp4"
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val resolver = context.contentResolver
-            val values = ContentValues().apply {
-                put(MediaStore.Video.Media.DISPLAY_NAME, name)
-                put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
-                put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/Shuvo Studio")
-                put(MediaStore.Video.Media.IS_PENDING, 1)
-            }
-            val destination = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
-                ?: error("Unable to create gallery video")
-            try {
-                resolver.openOutputStream(destination)?.use { out -> source.inputStream().use { it.copyTo(out) } }
-                    ?: error("Unable to write gallery video")
-                resolver.update(destination, ContentValues().apply { put(MediaStore.Video.Media.IS_PENDING, 0) }, null, null)
-                source.delete()
-                destination
-            } catch (error: Exception) {
-                resolver.delete(destination, null, null)
-                throw error
-            }
-        } else {
-            val directory = File(context.getExternalFilesDir(Environment.DIRECTORY_MOVIES) ?: context.filesDir, "Shuvo Studio")
-            check(directory.exists() || directory.mkdirs()) { "Unable to create export directory" }
-            val destination = File(directory, name)
-            source.copyTo(destination)
-            source.delete()
-            android.media.MediaScannerConnection.scanFile(context, arrayOf(destination.absolutePath), arrayOf("video/mp4"), null)
-            Uri.fromFile(destination)
+
+    fun export() {
+        val state = _uiState.value.timelineState
+        if (_uiState.value.isExporting) return
+        if (state.videoClips.isEmpty() && state.photoItems.isEmpty()) {
+            _uiState.update { it.copy(exportError = "Add a photo or video before exporting.") }
+            return
         }
+
+        viewModelScope.launch {
+            runCatching {
+                val snapshot = ExportRequestSnapshot.capture(state)
+                withContext(Dispatchers.IO) {
+                    ExportRequestSnapshotStore(getApplication<Application>()).save(snapshot)
+                }
+                ExportStatusBus.running()
+                ExportForegroundService.start(getApplication<Application>())
+            }.onFailure { error ->
+                ExportStatusBus.failed(error.message ?: "Unable to start export.")
+                _uiState.update {
+                    it.copy(isExporting = false, exportError = error.message ?: "Unable to start export.")
+                }
+            }
+        }
+    }
+
+    fun cancelExport() {
+        ExportForegroundService.cancel(getApplication<Application>())
     }
 
     fun clearExportResult() = _uiState.update { it.copy(exportedUri = null, exportError = null) }
