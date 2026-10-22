@@ -3,6 +3,13 @@ package com.example.photovideoeditor.ui.editor
 import android.app.Application
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
+import android.content.ContentValues
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.photovideoeditor.engine.EditorProjectRenderer
@@ -142,10 +149,50 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         _uiState.update { it.copy(isExporting = true, exportProgress = 0f, exportError = null, exportedUri = null) }
         viewModelScope.launch {
             renderer.render(state) { progress -> _uiState.update { it.copy(exportProgress = progress) } }
-                .onSuccess { uri -> _uiState.update { it.copy(isExporting = false, exportProgress = 1f, exportedUri = uri) } }
+                .onSuccess { uri ->
+                    runCatching { publishVideoExport(uri) }
+                        .onSuccess { saved -> _uiState.update { it.copy(isExporting = false, exportProgress = 1f, exportedUri = saved) } }
+                        .onFailure { error -> _uiState.update { it.copy(isExporting = false, exportError = error.message ?: "Saving export failed") } }
+                }
                 .onFailure { error -> _uiState.update { it.copy(isExporting = false, exportError = error.message ?: "Export failed") } }
         }
     }
+    private suspend fun publishVideoExport(sourceUri: Uri): Uri = withContext(Dispatchers.IO) {
+        val context = getApplication<Application>()
+        val source = requireNotNull(sourceUri.path).let(::File)
+        require(source.isFile) { "Rendered video is missing" }
+        val name = "Shuvo_${System.currentTimeMillis()}.mp4"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val resolver = context.contentResolver
+            val values = ContentValues().apply {
+                put(MediaStore.Video.Media.DISPLAY_NAME, name)
+                put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+                put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/Shuvo Studio")
+                put(MediaStore.Video.Media.IS_PENDING, 1)
+            }
+            val destination = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
+                ?: error("Unable to create gallery video")
+            try {
+                resolver.openOutputStream(destination)?.use { out -> source.inputStream().use { it.copyTo(out) } }
+                    ?: error("Unable to write gallery video")
+                resolver.update(destination, ContentValues().apply { put(MediaStore.Video.Media.IS_PENDING, 0) }, null, null)
+                source.delete()
+                destination
+            } catch (error: Exception) {
+                resolver.delete(destination, null, null)
+                throw error
+            }
+        } else {
+            val directory = File(context.getExternalFilesDir(Environment.DIRECTORY_MOVIES) ?: context.filesDir, "Shuvo Studio")
+            check(directory.exists() || directory.mkdirs()) { "Unable to create export directory" }
+            val destination = File(directory, name)
+            source.copyTo(destination)
+            source.delete()
+            android.media.MediaScannerConnection.scanFile(context, arrayOf(destination.absolutePath), arrayOf("video/mp4"), null)
+            Uri.fromFile(destination)
+        }
+    }
+
     fun clearExportResult() = _uiState.update { it.copy(exportedUri = null, exportError = null) }
 
     private fun updateSelectedClip(transform: (VideoClip) -> VideoClip) {
