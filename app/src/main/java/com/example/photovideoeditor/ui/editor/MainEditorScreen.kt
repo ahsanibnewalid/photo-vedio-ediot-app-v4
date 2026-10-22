@@ -1,6 +1,9 @@
 package com.example.photovideoeditor.ui.editor
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -61,67 +64,83 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.photovideoeditor.ui.effects.EffectCategory
 import com.example.photovideoeditor.ui.effects.EffectsBottomSheet
 
-private val Background = Color(0xFF0B0B0D)
-private val Surface = Color(0xFF151519)
+private val Background = Color(0xFF0F0F10)
+private val Surface = Color(0xFF1A1A1E)
 private val SurfaceHigh = Color(0xFF24242A)
-private val Cyan = Color(0xFF00E5FF)
+private val Cyan = Color(0xFF00F0FF)
 
 @Composable
 fun MainEditorScreen(viewModel: EditorViewModel, onImport: () -> Unit = {}, onImportAudio: () -> Unit = {}, onExport: () -> Unit = {}) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val selectedClip = state.videoClips.firstOrNull { it.id == state.selectedClipId }
 
-    Column(Modifier.fillMaxSize().background(Background)) {
-        Row(Modifier.fillMaxWidth().height(58.dp).background(Surface), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = viewModel::undo, enabled = state.canUndo) { Icon(Icons.Default.Undo, "Undo", tint = Color.White) }
-            IconButton(onClick = viewModel::redo, enabled = state.canRedo) { Icon(Icons.Default.Redo, "Redo", tint = Color.White) }
-            IconButton(onClick = onImport) { Icon(Icons.Default.FolderOpen, "Import media", tint = Color.White) }
-            Spacer(Modifier.weight(1f))
-            Text(if (state.videoClips.isEmpty()) "New project" else formatMs(state.currentPositionMs), color = Color.White)
+    Column(Modifier.fillMaxSize().background(Background).padding(horizontal = 14.dp)) {
+        Row(Modifier.fillMaxWidth().height(66.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.AutoAwesome, null, tint = Cyan, modifier = Modifier.size(28.dp))
             Spacer(Modifier.width(10.dp))
-            OutlinedButton(onClick = { viewModel.openSheet(ActiveSheet.CANVAS) }) { Text("Canvas") }
-            Spacer(Modifier.width(6.dp))
-            Button(onClick = onExport, enabled = state.videoClips.isNotEmpty() && !state.isExporting, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Color.Black)) { Text(if (state.isExporting) "Rendering…" else "Export") }
-            Spacer(Modifier.width(8.dp))
+            Column {
+                Text("SHUVO STUDIO", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                Text("CREATE WITHOUT LIMITS", color = Color(0xFF9E9EA6), style = MaterialTheme.typography.labelSmall)
+            }
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = onImport) { Icon(Icons.Default.FolderOpen, "Import", tint = Color.White) }
+            IconButton(onClick = { viewModel.openSheet(ActiveSheet.CANVAS) }) { Icon(Icons.Default.Tune, "Settings", tint = Color.White) }
         }
-
-        VideoPreviewSurface(player = viewModel.player, modifier = Modifier.fillMaxWidth().weight(0.62f))
-
-        Row(Modifier.fillMaxWidth().background(Surface).padding(horizontal = 8.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { viewModel.setPlaying(!state.isPlaying) }) { Icon(if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, "Play/Pause", tint = Cyan) }
-            ToolButton("Split", Icons.Default.ContentCut) { viewModel.splitSelectedClip() }
+        androidx.compose.foundation.layout.Box(
+            Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Surface, androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            VideoPreviewSurface(player = viewModel.player, modifier = Modifier.fillMaxSize())
+            IconButton(
+                onClick = { viewModel.setPlaying(!state.isPlaying) },
+                modifier = Modifier.align(Alignment.Center).size(58.dp).background(Color.Black.copy(alpha = 0.55f), androidx.compose.foundation.shape.CircleShape)
+            ) {
+                Icon(if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, "Play or pause", tint = Color.White, modifier = Modifier.size(32.dp))
+            }
+            Text(
+                "${formatMs(state.currentPositionMs)} / ${formatMs(state.durationMs)}",
+                modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp).background(Color.Black.copy(alpha = 0.65f), androidx.compose.foundation.shape.RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 5.dp),
+                color = Color.White, style = MaterialTheme.typography.labelSmall
+            )
+        }
+        Spacer(Modifier.height(20.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Timeline", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+            Spacer(Modifier.weight(1f))
+            Text("${formatMs(selectedClip?.mediaStartMs ?: 0L)} — ${formatMs(selectedClip?.mediaEndMs ?: state.durationMs)}", color = Cyan, style = MaterialTheme.typography.labelSmall)
+        }
+        Spacer(Modifier.height(12.dp))
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().weight(1f).background(Surface, androidx.compose.foundation.shape.RoundedCornerShape(16.dp)).padding(8.dp)) {
+            MagneticTimeline(
+                state = state.timelineState,
+                onPlayheadChanged = viewModel::seekTimeline,
+                onSelectClip = viewModel::selectClip,
+                onTrim = { clipId, newStart, newEnd ->
+                    val clip = state.videoClips.firstOrNull { it.id == clipId } ?: return@MagneticTimeline
+                    viewModel.trimClip(clipId, newStart, newEnd, clip.timelineStartMs, clip.timelineEndMs)
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            EditorAction("Open Media", Icons.Default.FolderOpen, onImport)
+            EditorAction("Trim", Icons.Default.ContentCut, { viewModel.splitSelectedClip() })
+            EditorAction("Audio", Icons.Default.MusicNote, { viewModel.openSheet(ActiveSheet.AUDIO) })
+            EditorAction("Export", Icons.Default.FileUpload, onExport, primary = true, enabled = state.videoClips.isNotEmpty() && !state.isExporting)
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ToolButton("Undo", Icons.Default.Undo, enabled = state.canUndo) { viewModel.undo() }
             ToolButton("Redo", Icons.Default.Redo, enabled = state.canRedo) { viewModel.redo() }
-        }
-
-        Row(Modifier.fillMaxWidth().background(Surface).horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            ToolButton("Media", Icons.Default.FolderOpen, onClick = onImport)
-            ToolButton("Audio", Icons.Default.MusicNote) { viewModel.openSheet(ActiveSheet.AUDIO) }
             ToolButton("Text", Icons.Default.TextFields) { viewModel.openSheet(ActiveSheet.TEXT) }
-            ToolButton("Captions", Icons.Default.GraphicEq) { viewModel.openSheet(ActiveSheet.CAPTIONS) }
             ToolButton("Effects", Icons.Default.AutoAwesome) { viewModel.openSheet(ActiveSheet.EFFECTS) }
-            ToolButton("Filters", Icons.Default.AutoAwesome) { viewModel.openSheet(ActiveSheet.EFFECTS) }
             ToolButton("Adjust", Icons.Default.Tune) { viewModel.openSheet(ActiveSheet.ADJUST) }
-            ToolButton("Crop", Icons.Default.ZoomIn) { viewModel.openSheet(ActiveSheet.TRANSFORM) }
-            ToolButton("Rotate", Icons.Default.RotateRight) { viewModel.rotateSelected(90f) }
-            ToolButton("Mirror", Icons.Default.Flip) { viewModel.toggleMirrorSelected() }
-            ToolButton("Volume", Icons.Default.VolumeUp) { viewModel.openSheet(ActiveSheet.AUDIO) }
             ToolButton("Speed", Icons.Default.Speed) { viewModel.openSheet(ActiveSheet.SPEED) }
-            ToolButton("AI", Icons.Default.AutoAwesome) { viewModel.openSheet(ActiveSheet.AI) }
-            ToolButton("Duplicate", Icons.Default.ContentCopy) { viewModel.duplicateSelectedClip() }
-            ToolButton("Delete", Icons.Default.Delete) { viewModel.deleteSelectedClip() }
+            ToolButton("More", Icons.Default.GraphicEq) { viewModel.openSheet(ActiveSheet.CAPTIONS) }
         }
-
-        MagneticTimeline(
-            state = state.timelineState,
-            onPlayheadChanged = viewModel::seekTimeline,
-            onSelectClip = viewModel::selectClip,
-            onTrim = { clipId, newStart, newEnd ->
-                val clip = state.videoClips.firstOrNull { it.id == clipId } ?: return@MagneticTimeline
-                viewModel.trimClip(clipId, newStart, newEnd, clip.timelineStartMs, clip.timelineEndMs)
-            },
-            modifier = Modifier.weight(0.38f)
-        )
+        Spacer(Modifier.height(10.dp))
     }
 
     EffectsBottomSheet(visible = state.activeSheet == ActiveSheet.EFFECTS, selectedCategory = EffectCategory.TRENDING, selectedEffectId = state.selectedEffectId, intensity = state.effectIntensity, onCategorySelected = {}, onEffectSelected = { viewModel.selectEffect(it.id) }, onIntensityChanged = viewModel::setEffectIntensity, onDismiss = viewModel::closeSheet)
@@ -204,5 +223,29 @@ private fun formatMs(ms: Long): String {
 private fun ToolButton(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, enabled: Boolean = true, onClick: () -> Unit) {
     FilledTonalButton(onClick = onClick, enabled = enabled, colors = ButtonDefaults.filledTonalButtonColors(containerColor = SurfaceHigh, contentColor = Color.White), contentPadding = PaddingValues(horizontal = 9.dp, vertical = 6.dp)) {
         Icon(icon, null, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text(label, style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+@Composable
+private fun EditorAction(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
+    primary: Boolean = false,
+    enabled: Boolean = true
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        IconButton(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = Modifier.size(58.dp).background(
+                if (primary) Cyan else Surface,
+                androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
+            )
+        ) {
+            Icon(icon, label, tint = if (primary) Background else Color.White, modifier = Modifier.size(24.dp))
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(label, color = if (primary) Cyan else Color(0xFF9E9EA6), style = MaterialTheme.typography.labelSmall)
     }
 }
