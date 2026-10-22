@@ -3,6 +3,7 @@ package com.example.photovideoeditor.editor.performance
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
@@ -76,8 +77,18 @@ class VideoExportWorker(context: Context, params: WorkerParameters) : CoroutineW
     }
 
     private fun createChannel() {
-        val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.createNotificationChannel(NotificationChannel(CHANNEL, "Video export", NotificationManager.IMPORTANCE_LOW))
+        // Notification channels exist only on Android 8.0 (API 26) and newer.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL,
+                "Export Progress",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Shows progress during video export"
+            }
+            val manager = applicationContext.getSystemService(NotificationManager::class.java)
+            manager?.createNotificationChannel(channel)
+        }
     }
 
     private fun notification(progress: Int) = NotificationCompat.Builder(applicationContext, CHANNEL)
