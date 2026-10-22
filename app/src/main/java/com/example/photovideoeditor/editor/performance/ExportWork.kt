@@ -4,6 +4,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
+import androidx.annotation.OptIn
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
@@ -23,7 +24,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-@UnstableApi
+@OptIn(UnstableApi::class)
 class VideoExportWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     companion object {
         const val INPUT_URI = "input_uri"

@@ -122,7 +122,13 @@ data class TimelineState(
     fun withRecalculatedDuration(): TimelineState {
         val videoEnd = videoClips.maxOfOrNull { it.timelineEndMs } ?: 0L
         val photoEnd = photoItems.maxOfOrNull { it.timelineEndMs } ?: 0L
-        val duration = maxOf(videoEnd, photoEnd)
-        return copy(totalDurationMs = duration, playheadMs = playheadMs.coerceIn(0L, duration))
+        val audioEnd = audioTracks.maxOfOrNull { it.timelineEndMs } ?: 0L
+        val textEnd = textOverlays.maxOfOrNull { it.timelineEndMs } ?: 0L
+        val duration = maxOf(videoEnd, photoEnd, audioEnd, textEnd)
+
+        return copy(
+            totalDurationMs = duration,
+            playheadMs = playheadMs.coerceIn(0L, duration)
+        )
     }
 }

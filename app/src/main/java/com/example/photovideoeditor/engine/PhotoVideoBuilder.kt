@@ -1,6 +1,7 @@
 package com.example.photovideoeditor.engine
 
 import android.net.Uri
+import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.effect.ScaleAndRotateTransformation
@@ -11,7 +12,7 @@ data class PhotoSegment(val uri: Uri, val durationMs: Long = 5000L, val rotation
     init { require(durationMs > 0L) }
 }
 
-@UnstableApi
+@OptIn(UnstableApi::class)
 object PhotoVideoBuilder {
     fun create(photo: PhotoSegment): EditedMediaItem {
         val item = MediaItem.Builder().setUri(photo.uri).setImageDurationMs(photo.durationMs).build()

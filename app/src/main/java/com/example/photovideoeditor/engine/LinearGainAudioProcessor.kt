@@ -1,5 +1,6 @@
 package com.example.photovideoeditor.engine
 
+import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.audio.AudioProcessor
@@ -9,7 +10,7 @@ import java.nio.ByteOrder
 import kotlin.math.roundToInt
 
 /** Applies linear gain to decoded PCM16 or float PCM samples. */
-@UnstableApi
+@OptIn(UnstableApi::class)
 class LinearGainAudioProcessor(initialGain: Float) : BaseAudioProcessor() {
     private val gain = initialGain.coerceIn(0f, 1f)
     init { require(initialGain.isFinite() && initialGain in 0f..1f) }
