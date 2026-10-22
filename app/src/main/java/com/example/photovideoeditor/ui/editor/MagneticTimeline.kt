@@ -1,6 +1,7 @@
 package com.example.photovideoeditor.ui.editor
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -93,6 +94,12 @@ fun MagneticTimeline(
                 selectedClipId = state.selectedClipId,
                 onSelectClip = onSelectClip,
                 onTrim = onTrim
+            )
+            PhotoTimelineTrackRow(
+                photos = state.photoItems,
+                metrics = metrics,
+                selectedClipId = state.selectedClipId,
+                onSelectPhoto = onSelectClip
             )
         }
 
@@ -202,4 +209,43 @@ private fun TrimHandle(modifier: Modifier, onDrag: (Float) -> Unit) {
                 detectHorizontalDragGestures { _, dragAmount -> onDrag(dragAmount) }
             }
     )
+}
+
+
+@Composable
+private fun PhotoTimelineTrackRow(
+    photos: List<PhotoTimelineItem>,
+    metrics: TimelineMetrics,
+    selectedClipId: String?,
+    onSelectPhoto: (String) -> Unit
+) {
+    if (photos.isEmpty()) return
+    Row(modifier = Modifier.height(64.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier.width(60.dp).fillMaxHeight().background(Color(0xFF1A1A1E)),
+            contentAlignment = Alignment.Center
+        ) { Text("PHOTO", color = Color(0xFF9E9EA6)) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            var cursorMs = 0L
+            photos.sortedBy { it.timelineStartMs }.forEach { photo ->
+                val gapMs = (photo.timelineStartMs - cursorMs).coerceAtLeast(0L)
+                if (gapMs > 0L) Box(Modifier.width(metrics.msToPx(gapMs).dp).height(1.dp))
+                Box(
+                    modifier = Modifier
+                        .width(metrics.msToPx(photo.durationMs).coerceAtLeast(48f).dp)
+                        .height(54.dp)
+                        .padding(vertical = 3.dp)
+                        .background(
+                            if (photo.id == selectedClipId) Color(0xFF16484C) else Color(0xFF3A303D),
+                            RoundedCornerShape(7.dp)
+                        )
+                        .clickable { onSelectPhoto(photo.id) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Photo", color = Color.White, maxLines = 1)
+                }
+                cursorMs = maxOf(cursorMs, photo.timelineEndMs)
+            }
+        }
+    }
 }
