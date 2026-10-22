@@ -7,6 +7,7 @@ data class EditorUiState(
     val currentPositionMs: Long = 0L,
     val durationMs: Long = 0L,
     val videoClips: List<VideoClip> = emptyList(),
+    val photoItems: List<PhotoTimelineItem> = emptyList(),
     val audioTracks: List<AudioTrack> = emptyList(),
     val textOverlays: List<TextOverlay> = emptyList(),
     val selectedTool: EditorTool? = null,
