@@ -30,11 +30,7 @@ class MainActivity : ComponentActivity() {
 
             when (contentResolver.getType(uri)?.substringBefore('/')) {
                 "video" -> editorViewModel.importVideo(uri)
-                "image" -> Toast.makeText(
-                    this,
-                    "Photo selected. Photo timeline and export support are not implemented yet.",
-                    Toast.LENGTH_LONG
-                ).show()
+                "image" -> editorViewModel.importVisualMedia(uri)
                 else -> Toast.makeText(
                     this,
                     "This media type is not supported.",
