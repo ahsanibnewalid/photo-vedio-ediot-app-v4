@@ -30,6 +30,9 @@ jobs:
           echo "ANDROID_HOME=$ANDROID_HOME"
           "$ANDROID_HOME/platform-tools/adb" version
 
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
       - name: Build debug APK with project wrapper
         run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
