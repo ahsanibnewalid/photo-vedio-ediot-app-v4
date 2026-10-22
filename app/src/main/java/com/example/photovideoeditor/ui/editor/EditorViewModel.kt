@@ -110,9 +110,21 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
     fun deleteSelectedClip() {
         val state = _uiState.value.timelineState
-        val clip = state.videoClips.firstOrNull { it.id == state.selectedClipId } ?: return
+        val selectedId = state.selectedClipId ?: return
         val before = state
-        val next = state.copy(videoClips = state.videoClips.filterNot { it.id == clip.id }, selectedClipId = null).withRecalculatedDuration()
+        val video = state.videoClips.firstOrNull { it.id == selectedId }
+        val next = if (video != null) {
+            state.copy(
+                videoClips = state.videoClips.filterNot { it.id == selectedId },
+                selectedClipId = null
+            ).withRecalculatedDuration()
+        } else {
+            val photo = state.photoItems.firstOrNull { it.id == selectedId } ?: return
+            state.copy(
+                photoItems = state.photoItems.filterNot { it.id == photo.id },
+                selectedClipId = null
+            ).withRecalculatedDuration()
+        }
         applyCommand(object : EditorCommand<TimelineState> {
             override fun execute(s: TimelineState) = next
             override fun undo(s: TimelineState) = before
@@ -146,7 +158,22 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
     fun toggleSelectedMute() { updateSelectedClip { it.copy(muted = !it.muted) } }
     fun setSelectedVolume(value: Float) { val volume = value.coerceIn(0f, 1f); updateSelectedClip { it.copy(volume = volume, muted = volume <= 0f) }; engine.setVolume(volume) }
-    fun rotateSelected(deltaDegrees: Float) { updateSelectedClip { it.copy(rotationDegrees = (it.rotationDegrees + deltaDegrees) % 360f) } }
+    fun rotateSelected(deltaDegrees: Float) {
+        val state = _uiState.value.timelineState
+        val id = state.selectedClipId ?: return
+        if (state.videoClips.any { it.id == id }) {
+            updateSelectedClip { it.copy(rotationDegrees = (it.rotationDegrees + deltaDegrees) % 360f) }
+        } else if (state.photoItems.any { it.id == id }) {
+            val before = state
+            val next = state.copy(photoItems = state.photoItems.map {
+                if (it.id == id) it.copy(rotationDegrees = (it.rotationDegrees + deltaDegrees) % 360f) else it
+            })
+            applyCommand(object : EditorCommand<TimelineState> {
+                override fun execute(s: TimelineState) = next
+                override fun undo(s: TimelineState) = before
+            })
+        }
+    }
     fun toggleMirrorSelected() { updateSelectedClip { it.copy(mirrored = !it.mirrored) } }
     fun setSelectedScale(value: Float) { updateSelectedClip { it.copy(scale = value.coerceIn(0.5f, 3f)) } }
 
