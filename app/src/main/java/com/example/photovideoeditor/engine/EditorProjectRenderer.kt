@@ -146,6 +146,7 @@ class EditorProjectRenderer(private val context: Context) {
             rotationDegrees = renderLayerConfig.rotationDegrees + photo.rotationDegrees
         )
         return EditedMediaItem.Builder(mediaItem)
+            .setFrameRate(30)
             .setEffects(RenderLayer.buildEffects(photoConfig, activeOverlays))
             .build()
     }
