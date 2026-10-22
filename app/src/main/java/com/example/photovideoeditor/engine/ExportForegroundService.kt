@@ -67,8 +67,11 @@ class ExportForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        getSystemService(NotificationManager::class.java).createNotificationChannel(
-            NotificationChannel(CHANNEL, "Shuvo Studio exports", NotificationManager.IMPORTANCE_LOW))
+        // Notification channels were introduced in API 26; minSdk remains 24.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            getSystemService(NotificationManager::class.java).createNotificationChannel(
+                NotificationChannel(CHANNEL, "Shuvo Studio exports", NotificationManager.IMPORTANCE_LOW))
+        }
     }
 
     private fun notification(percent: Int): Notification {
