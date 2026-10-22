@@ -3,6 +3,7 @@ package com.example.photovideoeditor.editor.performance
 import android.content.Context
 import android.net.Uri
 import androidx.media3.common.MediaItem
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.effect.ScaleAndRotateTransformation
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.Effects
@@ -14,6 +15,7 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import java.io.File
 
+@UnstableApi
 class ProxyGenerator(private val context: Context) {
     suspend fun generate(source: Uri, scale: Float = 0.5f): Uri {
         val file = File(context.cacheDir, "proxy_${source.hashCode()}_${(scale * 100).toInt()}.mp4")
