@@ -24,7 +24,7 @@ public class MainActivity extends Activity {
   @Override public void onCreate(Bundle b) {
     super.onCreate(b);
     try {
-    root=new LinearLayout(this); root.setOrientation(1);root.setPadding(18,20,18,12);
+    root=new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);root.setPadding(18,20,18,12);
     root.setBackgroundColor(Color.rgb(22,27,40));setContentView(root);
     TextView title=new TextView(this);title.setText("SHUVO STUDIO");title.setTextSize(26);title.setTextColor(Color.WHITE);root.addView(title);
     addButton("Open Photo",()->pick("image/*",PHOTO));
@@ -105,30 +105,72 @@ public class MainActivity extends Activity {
     }).start();
   }
   private void trim(Uri source,Uri dest,long from,long to)throws Exception{
+    File temp=File.createTempFile("shuvo_trim_",".mp4",getCacheDir());
     android.media.MediaExtractor extractor=new android.media.MediaExtractor();
     android.media.MediaMuxer muxer=null;
+    boolean muxerStarted=false;
     try{
       extractor.setDataSource(this,source,null);
-      try(android.os.ParcelFileDescriptor fd=getContentResolver().openFileDescriptor(dest,"w")){
-        if(fd==null)throw new IOException("Output unavailable");
-        muxer=new android.media.MediaMuxer(fd.getFileDescriptor(),android.media.MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
-        int[] mapping=new int[extractor.getTrackCount()];java.util.Arrays.fill(mapping,-1);
-        for(int i=0;i<mapping.length;i++){
-          android.media.MediaFormat format=extractor.getTrackFormat(i);String mime=format.getString(android.media.MediaFormat.KEY_MIME);
-          if(mime!=null&&(mime.startsWith("audio/")||mime.startsWith("video/"))){mapping[i]=muxer.addTrack(format);extractor.selectTrack(i);}
+      // The String-path constructor is available before API 26; the FileDescriptor
+      // overload is not, so export through a temporary file for API 24/25 too.
+      muxer=new android.media.MediaMuxer(temp.getAbsolutePath(),android.media.MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
+      int[] mapping=new int[extractor.getTrackCount()];
+      java.util.Arrays.fill(mapping,-1);
+      for(int i=0;i<mapping.length;i++){
+        android.media.MediaFormat format=extractor.getTrackFormat(i);
+        String mime=format.getString(android.media.MediaFormat.KEY_MIME);
+        if(mime!=null&&(mime.startsWith("audio/")||mime.startsWith("video/"))){
+          mapping[i]=muxer.addTrack(format);
+          extractor.selectTrack(i);
         }
-        muxer.start();extractor.seekTo(from,android.media.MediaExtractor.SEEK_TO_PREVIOUS_SYNC);
-        java.nio.ByteBuffer buffer=java.nio.ByteBuffer.allocateDirect(4*1024*1024);
-        android.media.MediaCodec.BufferInfo info=new android.media.MediaCodec.BufferInfo();long base=-1;
-        while(extractor.getSampleTrackIndex()>=0){
-          int track=extractor.getSampleTrackIndex();long time=extractor.getSampleTime();
-          if(time>=to)break;
-          buffer.clear();int size=extractor.readSampleData(buffer,0);if(size<0)break;
-          if(mapping[track]>=0){if(base<0)base=time;info.offset=0;info.size=size;info.presentationTimeUs=Math.max(0,time-base);info.flags=extractor.getSampleFlags();muxer.writeSampleData(mapping[track],buffer,info);}
-          extractor.advance();
-        }
-        muxer.stop();
       }
-    }finally{extractor.release();if(muxer!=null)muxer.release();}
+      boolean hasTrack=false;
+      for(int track:mapping) if(track>=0){hasTrack=true;break;}
+      if(!hasTrack) throw new IOException("No audio or video track to export");
+      muxer.start();
+      muxerStarted=true;
+      extractor.seekTo(from,android.media.MediaExtractor.SEEK_TO_PREVIOUS_SYNC);
+      java.nio.ByteBuffer buffer=java.nio.ByteBuffer.allocateDirect(4*1024*1024);
+      android.media.MediaCodec.BufferInfo info=new android.media.MediaCodec.BufferInfo();
+      long base=-1;
+      while(extractor.getSampleTrackIndex()>=0){
+        int track=extractor.getSampleTrackIndex();
+        long time=extractor.getSampleTime();
+        if(time>=to)break;
+        buffer.clear();
+        int size=extractor.readSampleData(buffer,0);
+        if(size<0)break;
+        if(mapping[track]>=0){
+          if(base<0)base=time;
+          info.offset=0;
+          info.size=size;
+          info.presentationTimeUs=Math.max(0,time-base);
+          // MediaExtractor and MediaCodec flag constants are different domains.
+          info.flags=(extractor.getSampleFlags() & android.media.MediaExtractor.SAMPLE_FLAG_SYNC)!=0
+              ? android.media.MediaCodec.BUFFER_FLAG_KEY_FRAME : 0;
+          muxer.writeSampleData(mapping[track],buffer,info);
+        }
+        extractor.advance();
+      }
+      muxer.stop();
+      muxerStarted=false;
+    }finally{
+      extractor.release();
+      if(muxer!=null){
+        if(muxerStarted){try{muxer.stop();}catch(RuntimeException ignored){}}
+        muxer.release();
+      }
+    }
+    try(InputStream in=new FileInputStream(temp);
+        OutputStream out=getContentResolver().openOutputStream(dest,"w")){
+      if(out==null)throw new IOException("Output unavailable");
+      byte[] chunk=new byte[64*1024];
+      int count;
+      while((count=in.read(chunk))!=-1)out.write(chunk,0,count);
+      out.flush();
+    }finally{
+      //noinspection ResultOfMethodCallIgnored
+      temp.delete();
+    }
   }
 }
