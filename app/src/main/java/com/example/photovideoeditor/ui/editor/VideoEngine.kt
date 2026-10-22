@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.roundToLong
 
 /** Bridges Media3 preview playback and the project timeline. */
+@UnstableApi
 class VideoEngine(
     context: Context,
     private val scope: CoroutineScope,
