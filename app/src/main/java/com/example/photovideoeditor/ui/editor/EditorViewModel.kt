@@ -3,6 +3,7 @@ package com.example.photovideoeditor.ui.editor
 import android.app.Application
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.content.ContentResolver
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
@@ -28,6 +29,40 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     private val renderer = EditorProjectRenderer(application)
     private val engine = VideoEngine(application, viewModelScope, ::updatePlaybackPosition, { playing -> _uiState.update { it.copy(isPlaying = playing) } }, ::updateDuration)
     val player get() = engine.player
+
+    fun importVisualMedia(uri: Uri) {
+        when (getApplication<Application>().contentResolver.getType(uri)?.substringBefore('/')) {
+            "image" -> importPhoto(uri)
+            "video" -> importVideo(uri)
+            else -> _uiState.update { it.copy(exportError = "This media type is not supported.") }
+        }
+    }
+
+    fun importPhoto(uri: Uri, durationMs: Long = 3_000L) {
+        viewModelScope.launch {
+            runCatching {
+                getApplication<Application>().contentResolver.openInputStream(uri)?.use { input ->
+                    require(input.read() >= 0) { "The selected photo could not be read." }
+                } ?: error("The selected photo could not be opened.")
+            }.onFailure { error ->
+                _uiState.update { it.copy(exportError = error.message ?: "The selected photo could not be read.") }
+                return@launch
+            }
+            val current = _uiState.value.timelineState
+            val photo = PhotoTimelineItem(
+                uri = uri,
+                durationMs = durationMs,
+                timelineStartMs = current.totalDurationMs
+            )
+            val next = current.copy(
+                photoItems = current.photoItems + photo,
+                selectedClipId = photo.id
+            ).withRecalculatedDuration()
+            history.replaceState(next)
+            publishTimeline(next)
+            engine.setTimeline(next)
+        }
+    }
 
     fun importVideo(uri: Uri) {
         viewModelScope.launch {
@@ -144,7 +179,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     fun canRedo() = history.canRedo()
 
     fun export() {
-        if (_uiState.value.isExporting || _uiState.value.videoClips.isEmpty()) return
+        if (_uiState.value.isExporting || (_uiState.value.videoClips.isEmpty() && _uiState.value.photoItems.isEmpty())) return
         val state = _uiState.value.timelineState
         _uiState.update { it.copy(isExporting = true, exportProgress = 0f, exportError = null, exportedUri = null) }
         viewModelScope.launch {
@@ -207,7 +242,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun applyCommand(command: EditorCommand<TimelineState>) { val next = history.executeCommand(command); publishTimeline(next); engine.setTimeline(next) }
-    private fun publishTimeline(state: TimelineState) { _uiState.update { it.copy(currentPositionMs = state.normalizedPlayhead(), durationMs = state.totalDurationMs, videoClips = state.videoClips, audioTracks = state.audioTracks, textOverlays = state.textOverlays, selectedClipId = state.selectedClipId, timelineState = state, canUndo = history.canUndo(), canRedo = history.canRedo()) } }
+    private fun publishTimeline(state: TimelineState) { _uiState.update { it.copy(currentPositionMs = state.normalizedPlayhead(), durationMs = state.totalDurationMs, videoClips = state.videoClips, photoItems = state.photoItems, audioTracks = state.audioTracks, textOverlays = state.textOverlays, selectedClipId = state.selectedClipId, timelineState = state, canUndo = history.canUndo(), canRedo = history.canRedo()) } }
     private fun readDuration(uri: Uri): Long { val retriever = MediaMetadataRetriever(); return try { retriever.setDataSource(getApplication<Application>(), uri); retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L } finally { retriever.release() } }
     override fun onCleared() { engine.release(); super.onCleared() }
 }
