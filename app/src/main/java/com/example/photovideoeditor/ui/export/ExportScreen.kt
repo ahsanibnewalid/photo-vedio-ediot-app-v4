@@ -3,6 +3,9 @@ package com.example.photovideoeditor.ui.export
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -22,7 +25,7 @@ private val Secondary = Color(0xFF9E9EA6)
 fun ExportScreen(progress: Float, settings: ExportSettings, onDone: () -> Unit, onShare: (ShareTarget) -> Unit) {
     val safe = progress.coerceIn(0f, 1f)
     val complete = safe >= 1f
-    Column(Modifier.fillMaxSize().background(Background).padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(Modifier.fillMaxSize().background(Background).verticalScroll(rememberScrollState()).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Spacer(Modifier.height(40.dp))
         Text(if (complete) "Export Complete" else "Exporting", style = MaterialTheme.typography.headlineLarge, color = Color.White)
         Spacer(Modifier.height(36.dp))
@@ -44,7 +47,7 @@ fun ExportScreen(progress: Float, settings: ExportSettings, onDone: () -> Unit, 
         Spacer(Modifier.weight(1f))
         Text("Share to", color = Secondary)
         Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ShareButton("TikTok", complete) { onShare(ShareTarget.TIKTOK) }
             ShareButton("Reels", complete) { onShare(ShareTarget.INSTAGRAM_REELS) }
             ShareButton("Shorts", complete) { onShare(ShareTarget.YOUTUBE_SHORTS) }
