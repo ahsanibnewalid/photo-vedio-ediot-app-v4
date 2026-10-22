@@ -74,7 +74,7 @@ fun MainEditorScreen(viewModel: EditorViewModel, onImport: () -> Unit = {}, onIm
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val selectedClip = state.videoClips.firstOrNull { it.id == state.selectedClipId }
 
-    Column(Modifier.fillMaxSize().background(Background).padding(horizontal = 14.dp)) {
+    Column(Modifier.fillMaxSize().background(Background).padding(horizontal = 12.dp)) {
         Row(Modifier.fillMaxWidth().height(66.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.AutoAwesome, null, tint = Cyan, modifier = Modifier.size(28.dp))
             Spacer(Modifier.width(10.dp))
