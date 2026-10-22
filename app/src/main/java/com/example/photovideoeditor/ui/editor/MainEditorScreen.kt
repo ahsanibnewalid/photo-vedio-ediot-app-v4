@@ -127,7 +127,7 @@ fun MainEditorScreen(viewModel: EditorViewModel, onImport: () -> Unit = {}, onIm
             EditorAction("Open Media", Icons.Default.FolderOpen, onImport)
             EditorAction("Trim", Icons.Default.ContentCut, { viewModel.splitSelectedClip() })
             EditorAction("Audio", Icons.Default.MusicNote, { viewModel.openSheet(ActiveSheet.AUDIO) })
-            EditorAction("Export", Icons.Default.FileUpload, onExport, primary = true, enabled = state.videoClips.isNotEmpty() && !state.isExporting)
+            EditorAction("Export", Icons.Default.FileUpload, onExport, primary = true, enabled = (state.videoClips.isNotEmpty() || state.photoItems.isNotEmpty()) && !state.isExporting)
         }
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
