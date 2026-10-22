@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ContentCopy
@@ -74,7 +76,10 @@ fun MainEditorScreen(viewModel: EditorViewModel, onImport: () -> Unit = {}, onIm
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val selectedClip = state.videoClips.firstOrNull { it.id == state.selectedClipId }
 
-    Column(Modifier.fillMaxSize().background(Background).padding(horizontal = 12.dp)) {
+    val configuration = LocalConfiguration.current
+    val timelineHeight = (configuration.screenHeightDp.dp * 0.20f).coerceIn(128.dp, 220.dp)
+    val horizontalPadding = if (configuration.screenWidthDp >= 600) 24.dp else 12.dp
+    Column(Modifier.fillMaxSize().background(Background).verticalScroll(rememberScrollState()).padding(horizontal = horizontalPadding)) {
         Row(Modifier.fillMaxWidth().height(66.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.AutoAwesome, null, tint = Cyan, modifier = Modifier.size(28.dp))
             Spacer(Modifier.width(10.dp))
@@ -111,7 +116,7 @@ fun MainEditorScreen(viewModel: EditorViewModel, onImport: () -> Unit = {}, onIm
             Text("${formatMs(selectedClip?.startInMediaMs ?: 0L)} — ${formatMs(selectedClip?.endInMediaMs ?: state.durationMs)}", color = Cyan, style = MaterialTheme.typography.labelSmall)
         }
         Spacer(Modifier.height(12.dp))
-        androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().weight(1f).background(Surface, androidx.compose.foundation.shape.RoundedCornerShape(16.dp)).padding(8.dp)) {
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().height(timelineHeight).background(Surface, androidx.compose.foundation.shape.RoundedCornerShape(16.dp)).padding(8.dp)) {
             MagneticTimeline(
                 state = state.timelineState,
                 onPlayheadChanged = viewModel::seekTimeline,
