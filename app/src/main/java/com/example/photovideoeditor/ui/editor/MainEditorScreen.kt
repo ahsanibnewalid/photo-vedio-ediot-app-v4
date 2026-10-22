@@ -2,7 +2,6 @@ package com.example.photovideoeditor.ui.editor
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -108,7 +107,7 @@ fun MainEditorScreen(viewModel: EditorViewModel, onImport: () -> Unit = {}, onIm
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("Timeline", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
             Spacer(Modifier.weight(1f))
-            Text("${formatMs(selectedClip?.mediaStartMs ?: 0L)} — ${formatMs(selectedClip?.mediaEndMs ?: state.durationMs)}", color = Cyan, style = MaterialTheme.typography.labelSmall)
+            Text("${formatMs(selectedClip?.startInMediaMs ?: 0L)} — ${formatMs(selectedClip?.endInMediaMs ?: state.durationMs)}", color = Cyan, style = MaterialTheme.typography.labelSmall)
         }
         Spacer(Modifier.height(12.dp))
         androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().weight(1f).background(Surface, androidx.compose.foundation.shape.RoundedCornerShape(16.dp)).padding(8.dp)) {
